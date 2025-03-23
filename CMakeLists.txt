@@ -71,6 +71,7 @@ install(TARGETS ${TEST_NAME}
         LIBRARY DESTINATION lib
 )
 install(FILES
+        # PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
         # 此配置文件包含模型路径，自行选择是否使用其中的路径
         ${PROJECT_SOURCE_DIR}/config/config.json
         # ppnc的推理库必须使用这两个配置文件，此文件设置了nms和deploy_paddle动态库路径

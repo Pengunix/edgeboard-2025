@@ -9,6 +9,8 @@
 #include "recognition/tracking.hpp"
 #include "uart.hpp"
 
+using namespace std::literals;
+
 int main() {
   // 赛道元素
   Motion motion("./config/config.json");
@@ -45,35 +47,25 @@ int main() {
     track.rowCutBottom = motion.params.rowCutBottom;
     track.trackRecognition(imageBin);
 
-    // 坡道
-    // if ((scene == Scene::NormalScene || scene == Scene::BridgeScene) &&
-    //     motion.params.bridge) {
-    //   if (bridge.process(track, detection->result)) {
-    //     if (scene == Scene::NormalScene)
-    //       uart->buzzer = BUZZER_WARNNING;
-    //     scene = Scene::BridgeScene;
-    //   } else {
-    //     if (scene == Scene::BridgeScene)
-    //       uart->buzzer = BUZZER_WARNNING;
-    //     scene = Scene::NormalScene;
-    //   }
-    // }
-
     if ((scene == Scene::NormalScene || scene == Scene::CrossScene) &&
         motion.params.cross) {
-      if (crossroad.crossRecognition(track))
+      if (crossroad.crossRecognition(track)) {
         scene = Scene::CrossScene;
-      else
+      }
+      else {
         scene = Scene::NormalScene;
+      }
     }
 
     //[12] 环岛识别与路径规划
     if ((scene == Scene::NormalScene || scene == Scene::RingScene) &&
         motion.params.ring) {
-      if (ring.process(track, imageBin))
+      if (ring.process(track, imageBin)) {
         scene = Scene::RingScene;
-      else
+      }
+      else {
         scene = Scene::NormalScene;
+      }
     }
     ctrlCent.fitting(track);
 

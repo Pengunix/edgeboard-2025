@@ -34,7 +34,6 @@
 #include <unordered_map>
 #include <vector>
 
-using namespace std::literals;
 
 #define COLSIMAGE 320    // 图像的列数
 #define ROWSIMAGE 240    // 图像的行数

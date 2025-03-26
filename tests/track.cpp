@@ -30,10 +30,14 @@ int main() {
   // 摄像头和串口
   auto capture = std::make_shared<Capture>(0);
   capture->open();
-  auto uart = std::make_shared<Uart>("/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0");
+  auto uart = std::make_shared<Uart>(
+      "/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0");
   if (uart->open() == -1) {
     return -1;
   }
+  uart->startReceive();
+  // uart->buzzer = BUZZER_START;
+  // uart->carControl(0, PWMSERVOMID);
 
   while (true) {
     auto FrameStartTime =
@@ -51,8 +55,7 @@ int main() {
         motion.params.cross) {
       if (crossroad.crossRecognition(track)) {
         scene = Scene::CrossScene;
-      }
-      else {
+      } else {
         scene = Scene::NormalScene;
       }
     }
@@ -62,12 +65,11 @@ int main() {
         motion.params.ring) {
       if (ring.process(track, imageBin)) {
         scene = Scene::RingScene;
-      }
-      else {
+      } else {
         scene = Scene::NormalScene;
       }
     }
-    ctrlCent.fitting(track);
+    ctrlCent.fitting(track, scene);
 
     if (ctrlCent.derailmentCheck(track)) {
       uart->carControl(0, PWMSERVOMID); // 控制车辆停止运动
@@ -111,6 +113,7 @@ int main() {
     }
 
     cv::imshow("Test", imageBGR);
+    savePicture(imageBGR);
     cv::waitKey(1);
   }
 

@@ -4,7 +4,7 @@ set(CMAKE_C_COMPILER "/usr/bin/gcc")
 
 project(icar)
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_FLAGS "-O3 -mcpu=native -flto")
+set(CMAKE_CXX_FLAGS "-Og -g -mcpu=native -flto")
 set(CMAKE_INSTALL_PREFIX /root/nfs)
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)

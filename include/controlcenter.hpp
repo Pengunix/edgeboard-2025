@@ -2,14 +2,22 @@
 #include "common.hpp"
 #include "recognition/tracking.hpp"
 
-
 class ControlCenter {
 public:
-  int controlCenter;           // 智能车控制中心（0~320）
-  std::vector<POINT> centerEdge;    // 赛道中心点集
+  int controlCenter; // 智能车控制中心（0~320）
+  std::vector<POINT> centerEdge, centerEdge_show, centerEdge1, centerEdge_show1;
+  std::vector<cv::Point2f> last_pointsToTransform_left,
+      last_pointsToTransform_right;
+  std::vector<POINT> transformedPoints_Left, transformedPoints_Right,
+      last_transformedPoints_Left, last_transformedPoints_Right;
+  std::vector<POINT> speed_centeredge;
+  cv::Mat invMat_auto = auto_init_ipm_mat();
+  cv::Mat inverse = invMat_auto.inv();
   uint16_t validRowsLeft = 0;  // 边缘有效行数（左）
   uint16_t validRowsRight = 0; // 边缘有效行数（右）
   double sigmaCenter = 0;      // 中心点集的方差
+  int left_num = 0, right_num = 0;
+  int aim_idx, speed_aim_idx;
 
   /**
    * @brief 控制中心计算
@@ -18,160 +26,251 @@ public:
    * @param pointsEdgeRight 赛道右边缘点集
    */
 
-  void fitting(Tracking &track) {
+  void fitting(Tracking &track, Scene scene) {
     sigmaCenter = 0;
     controlCenter = COLSIMAGE / 2;
     centerEdge.clear();
-    std::vector<POINT> v_center(4); // 三阶贝塞尔曲线
+    centerEdge_show.clear();
+    std::vector<POINT> v_center(4);
     style = "STRIGHT";
+    int premode = 0;
 
-    // 边缘斜率重计算（边缘修正之后）
-    track.stdevLeft = track.stdevEdgeCal(track.pointsEdgeLeft, ROWSIMAGE);
-    track.stdevRight = track.stdevEdgeCal(track.pointsEdgeRight, ROWSIMAGE);
+    if (scene == Scene::NormalScene || scene == Scene::CrossScene ||
+        scene == Scene::ParkingScene || scene == Scene::RingScene ||
+        scene == Scene::LaybyScene || scene == Scene::BridgeScene) {
+#if 1
+      // 逆透视图像
+      cv::Mat only_boundary =
+          cv::Mat::zeros(cv::Size(COLSIMAGE, ROWSIMAGE), CV_8UC1);
 
-    // 边缘有效行优化
-    // if ((track.stdevLeft < 80 && track.stdevRight > 50) ||
-    //     (track.stdevLeft > 60 && track.stdevRight < 50)) {
-    //   validRowsCal(track.pointsEdgeLeft,
-    //                track.pointsEdgeRight); // 边缘有效行计算
-    //   track.pointsEdgeLeft.resize(validRowsLeft);
-    //   track.pointsEdgeRight.resize(validRowsRight);
-    // }
+      std::vector<cv::Point2f> pointsToTransform_left = convertPointsToCvPoints(
+                                   track.pointsEdgeLeft),
+                               pointsToTransform_right =
+                                   convertPointsToCvPoints(
+                                       track.pointsEdgeRight),
+                               transformedPoints;
+#endif
+      // 防止点集为空导致逆透视throw
+      if (pointsToTransform_left.size() < 5 ||
+          pointsToTransform_left.size() > 200)
+        pointsToTransform_left = last_pointsToTransform_left;
+      else
+        last_pointsToTransform_left = pointsToTransform_left;
+      if (pointsToTransform_right.size() < 5 ||
+          pointsToTransform_right.size() > 200)
+        pointsToTransform_right = last_pointsToTransform_right;
+      else
+        last_pointsToTransform_right = pointsToTransform_right;
 
-    if (track.pointsEdgeLeft.size() > 10 &&
-        track.pointsEdgeRight.size() > 10) // 通过双边缘有效点的差来判断赛道类型
-    {
-      v_center[0] = {
-          (track.pointsEdgeLeft[0].x + track.pointsEdgeRight[0].x) / 2,
-          (track.pointsEdgeLeft[0].y + track.pointsEdgeRight[0].y) / 2};
+      // 左边线逆透视
+      perspectiveTransform(pointsToTransform_left, transformedPoints,
+                           invMat_auto);
+      transformedPoints_Left = convertCvPointsToPoints(transformedPoints);
+      // 右边线逆透视
+      perspectiveTransform(pointsToTransform_right, transformedPoints,
+                           invMat_auto);
+      transformedPoints_Right = convertCvPointsToPoints(transformedPoints);
 
-      v_center[1] = {
-          (track.pointsEdgeLeft[track.pointsEdgeLeft.size() / 3].x +
-           track.pointsEdgeRight[track.pointsEdgeRight.size() / 3].x) /
-              2,
-          (track.pointsEdgeLeft[track.pointsEdgeLeft.size() / 3].y +
-           track.pointsEdgeRight[track.pointsEdgeRight.size() / 3].y) /
-              2};
+      transformedPoints_Left =
+          blur_points(transformedPoints_Left, using_kernel_num); //三角滤波
+      transformedPoints_Right =
+          blur_points(transformedPoints_Right, using_kernel_num);
+      transformedPoints_Left =
+          resample_points(transformedPoints_Left,
+                          using_resample_dist * pixel_per_meter); //下采样
+      transformedPoints_Right = resample_points(
+          transformedPoints_Right, using_resample_dist * pixel_per_meter);
+#if 1
+      // 逆透视图像绘制
+      // 画左边线
+      transformedPoints = convertPointsToCvPoints(transformedPoints_Left);
+      for (size_t i = 0; i < transformedPoints.size(); i++) {
+        circle(only_boundary, transformedPoints[i], 0,
+               cv::Scalar(255, 255, 255), 2);
+      }
+      // 画右边线
+      transformedPoints = convertPointsToCvPoints(transformedPoints_Right);
+      for (size_t i = 0; i < transformedPoints.size(); i++) {
+        circle(only_boundary, transformedPoints[i], 0,
+               cv::Scalar(255, 255, 255), 2);
+      }
+#endif
 
-      v_center[2] = {
-          (track.pointsEdgeLeft[track.pointsEdgeLeft.size() * 2 / 3].x +
-           track.pointsEdgeRight[track.pointsEdgeRight.size() * 2 / 3].x) /
-              2,
-          (track.pointsEdgeLeft[track.pointsEdgeLeft.size() * 2 / 3].y +
-           track.pointsEdgeRight[track.pointsEdgeRight.size() * 2 / 3].y) /
-              2};
-
-      v_center[3] = {
-          (track.pointsEdgeLeft[track.pointsEdgeLeft.size() * 0.9].x +
-           track.pointsEdgeRight[track.pointsEdgeRight.size() * 0.9].x) /
-              2,
-          (track.pointsEdgeLeft[track.pointsEdgeLeft.size() * 0.9].y +
-           track.pointsEdgeRight[track.pointsEdgeRight.size() * 0.9].y) /
-              2};
-
-      centerEdge = Bezier(0.03, v_center);
-
-      style = "STRIGHT";
-    }
-    // 左单边
-    else if ((!track.pointsEdgeLeft.empty() &&
-              track.pointsEdgeRight.size() <= 10) ||
-             (!track.pointsEdgeLeft.empty() &&
-              !track.pointsEdgeRight.empty() &&
-              track.pointsEdgeLeft[0].x - track.pointsEdgeRight[0].x >
-                  ROWSIMAGE / 2)) {
-      style = "RIGHT";
-      centerEdge = centerCompute(track.pointsEdgeLeft, 0);
-    }
-    // 右单边
-    else if ((!track.pointsEdgeRight.empty() &&
-              track.pointsEdgeLeft.size() <= 10) ||
-             (!track.pointsEdgeRight.empty() &&
-              !track.pointsEdgeLeft.empty() &&
-              track.pointsEdgeRight[0].x - track.pointsEdgeLeft[0].x >
-                  ROWSIMAGE / 2)) {
-      style = "LEFT";
-      centerEdge = centerCompute(track.pointsEdgeRight, 1);
-    } else if (track.pointsEdgeLeft.size() > 10 &&
-               track.pointsEdgeRight.empty()) // 左单边
-    {
-      v_center[0] = {track.pointsEdgeLeft[0].x,
-                     (track.pointsEdgeLeft[0].y + COLSIMAGE - 1) / 2};
-
-      v_center[1] = {track.pointsEdgeLeft[track.pointsEdgeLeft.size() / 3].x,
-                     (track.pointsEdgeLeft[track.pointsEdgeLeft.size() / 3].y +
-                      COLSIMAGE - 1) /
-                         2};
-
-      v_center[2] = {
-          track.pointsEdgeLeft[track.pointsEdgeLeft.size() * 2 / 3].x,
-          (track.pointsEdgeLeft[track.pointsEdgeLeft.size() * 2 / 3].y +
-           COLSIMAGE - 1) /
-              2};
-
-      v_center[3] = {track.pointsEdgeLeft[track.pointsEdgeLeft.size() - 1].x,
-                     (track.pointsEdgeLeft[track.pointsEdgeLeft.size() - 1].y +
-                      COLSIMAGE - 1) /
-                         2};
-
-      centerEdge = Bezier(0.02, v_center);
-
-      style = "RIGHT";
-    } else if (track.pointsEdgeLeft.size() == 0 &&
-               track.pointsEdgeRight.size() > 10) // 右单边
-    {
-      v_center[0] = {track.pointsEdgeRight[0].x,
-                     track.pointsEdgeRight[0].y / 2};
-
-      v_center[1] = {track.pointsEdgeRight[track.pointsEdgeRight.size() / 3].x,
-                     track.pointsEdgeRight[track.pointsEdgeRight.size() / 3].y /
-                         2};
-
-      v_center[2] = {
-          track.pointsEdgeRight[track.pointsEdgeRight.size() * 2 / 3].x,
-          track.pointsEdgeRight[track.pointsEdgeRight.size() * 2 / 3].y / 2};
-
-      v_center[3] = {track.pointsEdgeRight[track.pointsEdgeRight.size() - 1].x,
-                     track.pointsEdgeRight[track.pointsEdgeRight.size() - 1].y /
-                         2};
-
-      centerEdge = Bezier(0.02, v_center);
-
-      style = "LEFT";
-    }
-
-    // 加权控制中心计算
-    int controlNum = 1;
-    for (auto p : centerEdge) {
-      if (p.x < ROWSIMAGE / 2) {
-        controlNum += ROWSIMAGE / 2;
-        controlCenter += p.y * ROWSIMAGE / 2;
+      //中线
+      left_num = 0, right_num = 0;
+      int bound = (track.pointsEdgeLeft.size() > 100
+                       ? (track.pointsEdgeLeft.size() - 20)
+                       : track.pointsEdgeLeft.size());
+      if (track.pointsEdgeLeft.size() < 20)
+        ;
+      else {
+        for (int i = 0; i < bound; i++) {
+          if (track.pointsEdgeLeft[i].y <= 3)
+            left_num = 0;
+          else
+            left_num++;
+        }
+        for (int i = 0; i < bound; i++) {
+          if (track.pointsEdgeRight[i].y >= COLSIMAGE - 3)
+            right_num = 0;
+          else
+            right_num++;
+        }
+      }
+      // TODO: 循线环岛
+      // if (scene == Scene::RingScene && ringstep == 4 && R100) {
+      if (false) {
+        // if (ringleft == 1)
+        if (false)
+          centerEdge = track_leftline(transformedPoints_Left, 5,
+                                      0.225 * pixel_per_meter);
+        else
+          centerEdge = track_rightline(transformedPoints_Right, 5,
+                                       0.225 * pixel_per_meter);
       } else {
-        controlNum += (ROWSIMAGE - p.x);
-        controlCenter += p.y * (ROWSIMAGE - p.x);
+        if (left_num >= right_num)
+          centerEdge = track_leftline(transformedPoints_Left, 5,
+                                      0.225 * pixel_per_meter);
+        else
+          centerEdge = track_rightline(transformedPoints_Right, 5,
+                                       0.225 * pixel_per_meter);
       }
-    }
-    if (controlNum > 1) {
-      controlCenter = controlCenter / controlNum;
-    }
+      speed_centeredge = centerEdge; //用作速度策略的中线
 
-    if (controlCenter > COLSIMAGE)
-      controlCenter = COLSIMAGE;
-    else if (controlCenter < 0)
-      controlCenter = 0;
-
-    // 控制率计算
-    if (centerEdge.size() > 20) {
-      std::vector<POINT> centerV;
-      int filt = centerEdge.size() / 5;
-      for (size_t i = filt; i < centerEdge.size() - filt;
-           i++) // 过滤中心点集前后1/5的诱导性
-      {
-        centerV.push_back(centerEdge[i]);
+      // 找最近点(起始点中线归一化)
+      POINT car(ROWSIMAGE - 1, COLSIMAGE / 2);
+      float min_dist = 1e10;
+      int begin_id = -1;
+      for (int i = 0; i < centerEdge.size(); i++) {
+        float dx = centerEdge[i].x - car.x;
+        float dy = centerEdge[i].y - car.y;
+        float dist = sqrt(dx * dx + dy * dy);
+        if (dist < min_dist) {
+          min_dist = dist;
+          begin_id = i;
+        }
       }
-      sigmaCenter = sigma(centerV);
-    } else
-      sigmaCenter = 1000;
+      centerEdge[begin_id].x = car.x;
+      centerEdge[begin_id].y = car.y;
+      centerEdge = resample_points(
+          std::vector<POINT>(centerEdge.begin() + begin_id, centerEdge.end()),
+          using_resample_dist * pixel_per_meter); //中线下采样
+
+      centerEdge1 =
+          track_rightline(transformedPoints_Right, 5, 0.225 * pixel_per_meter);
+      centerEdge1[begin_id].x = car.x;
+      centerEdge1[begin_id].y = car.y;
+      std::cout << "centerEdge1 size" << centerEdge1.size() << std::endl;
+      std::cout << "begin id" << begin_id << std::endl;
+      centerEdge1 = resample_points(
+          std::vector<POINT>(centerEdge1.begin() + begin_id, centerEdge1.end()),
+          using_resample_dist * pixel_per_meter); //中线下采样
+
+      std::vector<cv::Point2f> pointsToTransform_center =
+          convertPointsToCvPoints(centerEdge); //中线转为cvpoint
+      perspectiveTransform(pointsToTransform_center, transformedPoints,
+                           inverse); //透视
+      centerEdge_show =
+          convertCvPointsToPoints(transformedPoints); //透视后中线转为POINT
+
+      pointsToTransform_center =
+          convertPointsToCvPoints(centerEdge1); //中线转为cvpoint
+      std::cout << "pointstoTrans size: " << pointsToTransform_center.size() << std::endl;
+      perspectiveTransform(pointsToTransform_center, transformedPoints,
+                           inverse); //透视
+      centerEdge_show1 =
+          convertCvPointsToPoints(transformedPoints); //透视后中线转为POINT
+
+      // TODO: 变锚点距离
+      aim_idx = clip(round(0.1 / using_resample_dist), 0,
+                  centerEdge.size() - 1); //跟随点
+      speed_aim_idx = clip(round(0.8 / using_resample_dist), 0,
+                           centerEdge.size() - 1); //跟随点
+
+      // 加权控制中心计算
+      int controlNum = 1;
+      // TODO: 变计算起始行
+      int temp_point = 180;
+      if (centerEdge[centerEdge.size() - 1].x > temp_point) {
+        temp_point = centerEdge[centerEdge.size() - 1].x;
+      }
+      for (auto p : centerEdge) {
+        if (p.x > temp_point && p.x < temp_point + 10) {
+          controlNum += ROWSIMAGE / 2;
+          controlCenter += p.y * ROWSIMAGE / 2;
+        }
+      }
+      if (controlNum > 1) {
+        controlCenter = controlCenter / controlNum;
+      }
+
+      if (speed_centeredge.size() > 10) {
+        std::vector<POINT> centerV;
+        int filt = speed_centeredge.size() / 5;
+        // 过滤中心点集前后1/5的诱导性
+        for (int i = filt; i < speed_centeredge.size() - filt; i++) {
+          centerV.push_back(speed_centeredge[i]);
+        }
+        sigmaCenter = sigma(centerV);
+      } else
+        sigmaCenter = 1000;
+#if 1
+      // 逆透视边缘图像
+      for (size_t i = 0; i < pointsToTransform_center.size(); i++) {
+        if (i == aim_idx)
+          circle(only_boundary, pointsToTransform_center[i], 3,
+                 cv::Scalar(255, 255, 255), 2);
+        else
+          circle(only_boundary, pointsToTransform_center[i], 0,
+                 cv::Scalar(255, 255, 255), 2);
+      }
+      imshow("11", only_boundary);
+#endif
+
+    } else {
+      POINT pp;
+      for (int i = 0; i < track.pointsEdgeLeft.size(); i++) {
+        pp.x = track.pointsEdgeLeft[i].x;
+        pp.y = (track.pointsEdgeLeft[i].y + track.pointsEdgeRight[i].y) / 2;
+        centerEdge.push_back(pp);
+        centerEdge_show.push_back(pp);
+      }
+      // 加权控制中心计算
+      int controlNum = 1;
+
+      // TODO: 变计算起始行
+      int temp_point = 100;
+      if (centerEdge[centerEdge.size() - 1].x > temp_point) {
+        temp_point = centerEdge[centerEdge.size() - 1].x;
+      }
+      for (auto p : centerEdge) {
+        if (p.x > temp_point && p.x < temp_point + 20) {
+          controlNum += ROWSIMAGE / 2;
+          controlCenter += p.y * ROWSIMAGE / 2;
+        }
+      }
+      if (controlNum > 1) {
+        controlCenter = controlCenter / controlNum;
+      }
+
+      if (controlCenter > COLSIMAGE)
+        controlCenter = COLSIMAGE;
+      else if (controlCenter < 0)
+        controlCenter = 0;
+
+      // 控制率计算
+      if (centerEdge.size() > 20) {
+        std::vector<POINT> centerV;
+        int filt = centerEdge.size() / 5;
+        for (int i = filt; i < centerEdge.size() - filt;
+             i++) // 过滤中心点集前后1/5的诱导性
+        {
+          centerV.push_back(centerEdge[i]);
+        }
+        sigmaCenter = sigma(centerV);
+      } else
+        sigmaCenter = 1000;
+    }
   }
 
   /**
@@ -205,22 +304,51 @@ public:
    * @param centerImage 需要叠加显示的图像
    */
   void drawImage(Tracking track, cv::Mat &centerImage) {
-    // 赛道边缘绘制
-    for (size_t i = 0; i < track.pointsEdgeLeft.size(); i++) {
-      circle(centerImage,
-             cv::Point(track.pointsEdgeLeft[i].y, track.pointsEdgeLeft[i].x), 1,
-             cv::Scalar(0, 255, 0), -1); // 绿色点
+    for (int i = 0; i < track.pointsEdgeLeft.size(); i++) {
+      if (track.pointsEdgeLeft[i].x >= 0 &&
+          track.pointsEdgeLeft[i].x < ROWSIMAGE &&
+          track.pointsEdgeLeft[i].y >= 0 &&
+          track.pointsEdgeLeft[i].y < COLSIMAGE) {
+        circle(centerImage,
+               cv::Point(track.pointsEdgeLeft[i].y, track.pointsEdgeLeft[i].x),
+               1, cv::Scalar(0, 255, 0), -1); // 绿色点
+      }
     }
-    for (size_t i = 0; i < track.pointsEdgeRight.size(); i++) {
-      circle(centerImage,
-             cv::Point(track.pointsEdgeRight[i].y, track.pointsEdgeRight[i].x), 1,
-             cv::Scalar(0, 255, 255), -1); // 黄色点
+    for (int i = 0; i < track.pointsEdgeRight.size(); i++) {
+      if (track.pointsEdgeRight[i].x >= 0 &&
+          track.pointsEdgeRight[i].x < ROWSIMAGE &&
+          track.pointsEdgeRight[i].y >= 0 &&
+          track.pointsEdgeRight[i].y < COLSIMAGE) {
+        circle(
+            centerImage,
+            cv::Point(track.pointsEdgeRight[i].y, track.pointsEdgeRight[i].x),
+            1, cv::Scalar(0, 255, 255), -1); // 黄色点
+      }
     }
 
     // 绘制中心点集
-    for (size_t i = 0; i < centerEdge.size(); i++) {
-      circle(centerImage, cv::Point(centerEdge[i].y, centerEdge[i].x), 1,
-             cv::Scalar(0, 0, 255), -1);
+    for (int i = 0; i < centerEdge.size(); i++) {
+      if (centerEdge_show[i].x >= 0 && centerEdge_show[i].x < ROWSIMAGE &&
+          centerEdge_show[i].y >= 0 && centerEdge_show[i].y < COLSIMAGE) {
+        if (i == aim_idx)
+          circle(centerImage,
+                 cv::Point(centerEdge_show[i].y, centerEdge_show[i].x), 3,
+                 cv::Scalar(128, 0, 255), -1);
+        else
+          circle(centerImage,
+                 cv::Point(centerEdge_show[i].y, centerEdge_show[i].x), 1,
+                 cv::Scalar(0, 128, 255), -1);
+      }
+      if (centerEdge_show1[i].x >= 0 && centerEdge_show1[i].x < ROWSIMAGE &&
+          centerEdge_show1[i].y >= 0 && centerEdge_show1[i].y < COLSIMAGE) {
+        if (i == aim_idx)
+          circle(centerImage,
+                 cv::Point(centerEdge_show1[i].y, centerEdge_show1[i].x), 3,
+                 cv::Scalar(128, 0, 255), -1);
+        circle(centerImage,
+               cv::Point(centerEdge_show1[i].y, centerEdge_show1[i].x), 1,
+               cv::Scalar(0, 128, 255), -1);
+      }
     }
 
     // 绘制加权控制中心：方向
@@ -230,27 +358,27 @@ public:
     // 详细控制参数显示
     int dis = 20;
     std::string str;
-    putText(centerImage, style, cv::Point(COLSIMAGE - 65, dis), cv::FONT_HERSHEY_PLAIN,
-            1, cv::Scalar(0, 0, 255), 1); // 赛道类型
+    putText(centerImage, style, cv::Point(COLSIMAGE - 60, dis),
+            cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(0, 0, 255), 1); // 赛道类型
 
     str = "Edge: " + formatDoble2String(track.stdevLeft, 1) + " | " +
           formatDoble2String(track.stdevRight, 1);
     putText(centerImage, str, cv::Point(COLSIMAGE - 150, 2 * dis),
-           cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(0, 0, 255), 1); // 斜率：左|右
+            cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(0, 0, 255), 1); // 斜率：左|右
 
     str = "Center: " + formatDoble2String(sigmaCenter, 2);
     putText(centerImage, str, cv::Point(COLSIMAGE - 120, 3 * dis),
             cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(0, 0, 255), 1); // 中心点方差
 
     putText(centerImage, std::to_string(controlCenter),
-            cv::Point(COLSIMAGE / 2 - 10, ROWSIMAGE - 40), cv::FONT_HERSHEY_PLAIN, 1.2,
-            cv::Scalar(0, 0, 255), 1); // 中心
+            cv::Point(COLSIMAGE / 2 - 10, ROWSIMAGE - 40),
+            cv::FONT_HERSHEY_PLAIN, 1.2, cv::Scalar(0, 0, 255), 1); // 中心
   }
 
 private:
-  int countOutlineA = 0; // 车辆脱轨检测计数器
-  int countOutlineB = 0; // 车辆脱轨检测计数器
-  std::string style = "";     // 赛道类型
+  int countOutlineA = 0;  // 车辆脱轨检测计数器
+  int countOutlineB = 0;  // 车辆脱轨检测计数器
+  std::string style = ""; // 赛道类型
   /**
    * @brief 搜索十字赛道突变行（左下）
    *
@@ -371,5 +499,4 @@ private:
     return center;
     // return Bezier(0.2,center);
   }
-
 };

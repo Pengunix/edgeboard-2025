@@ -17,8 +17,8 @@ public:
     distCoeffs = cv::Mat(1, 5, CV_32FC1, cv::Scalar::all(0)); // 相机的畸变矩阵
     cv::FileStorage file;
     if (file.open(path, cv::FileStorage::READ)) {
-      file["cameracv::Matrix"] >> cameraMatrix;
-      file["distCoeffs"] >> distCoeffs;
+      file["camera-atrix"] >> cameraMatrix;
+      file["distortion"] >> distCoeffs;
       spdlog::info("[preprocess] 相机参数加载成功");
       enable = true;
     } else {
@@ -75,6 +75,9 @@ public:
     } else {
       return image;
     }
+  }
+  cv::Mat getCameraMatrix() {
+    return cameraMatrix;
   }
 
 private:

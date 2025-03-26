@@ -51,18 +51,8 @@ private:
   std::unique_ptr<std::thread> threadRec;
   std::shared_ptr<LibSerial::SerialPort> serialPort = nullptr;
   std::string portName;
- 
-
-  int receiveBytes(unsigned char &charBuffer, size_t msTimeout = 0) {
-    try {
-      serialPort->ReadByte(charBuffer, msTimeout);
-
-    } catch (const LibSerial::ReadTimeout &) {
-      spdlog::critical("Serail Receive Timeout");
-      return -2;
-    }
-    return 0;
-  };
+  UartRecvFrame rxBuff;
+  bool uartRecv;
 
 public:
   Uart(const std::string &port) : portName(port){};
@@ -73,7 +63,7 @@ public:
   bool isOpen = false;
   Buzzer buzzer = BUZZER_SLIENT;
 
-  int open(void) {
+  int open() {
     serialPort = std::make_shared<LibSerial::SerialPort>();
     if (serialPort == nullptr) {
       spdlog::critical("Serial Pointer is NULL!");
@@ -112,21 +102,24 @@ public:
   }
 
   void startReceive() {
-    if (!isOpen) // 串口是否正常打开
+    if (!isOpen) {
       return;
-    // 启动串口接收子线程
+    }
+    uartRecv = true;
     threadRec = std::make_unique<std::thread>([this]() {
-      while (1) {
-        receiveCheck(); // 串口接收校验
+      while(this->uartRecv) {
+        receiveCheck();
       }
     });
   }
 
-  void close(void) {
+  void close() {
     spdlog::warn("Uart Exit!");
     carControl(0, PWMSERVOMID);
-
-    // threadRec->join();
+    uartRecv = false;
+    if (threadRec->joinable()) {
+      threadRec->join();
+    }
     if (serialPort != nullptr) { // 释放串口资源
       serialPort->Close();
       serialPort = nullptr;
@@ -134,56 +127,26 @@ public:
     isOpen = false;
   }
 
- void receiveCheck() {
-//     if (!isOpen) {
-//       return;
-//     }
-
-//     uint8_t resByte = 0;
-//     int ret = receiveBytes(resByte, 0);
-//     if (ret == 0) {
-//       if (resByte == UART_FRAME_HEAD) {
-
-//         serialStr.start = true;
-//         serialStr.buffRead[0] = resByte;
-//         serialStr.buffRead[2] = UART_FRAME_LENMIN;
-//         serialStr.index = 1;
-//       } else if (serialStr.index == 2) {
-
-//         serialStr.buffRead[serialStr.index] = resByte;
-//         serialStr.index++;
-//         if (resByte > UART_FRAME_LENMAX || resByte < UART_FRAME_LENMIN) {
-//           serialStr.buffRead[2] = UART_FRAME_LENMIN;
-//           serialStr.index = 0;
-//           serialStr.start = false;
-//         }
-
-//       } else if (serialStr.start && serialStr.index < UART_FRAME_LENMAX) {
-//         serialStr.buffRead[serialStr.index] = resByte;
-//         serialStr.index++;
-//       }
-
-//       // 帧长接收完毕
-//       if ((serialStr.index >= UART_FRAME_LENMAX ||
-//            serialStr.index >= serialStr.buffRead[2]) &&
-//           serialStr.index > UART_FRAME_LENMIN) {
-
-//         // 求校验和
-//         uint8_t check = 0;
-//         uint8_t length = UART_FRAME_LENMIN;
-//         length = serialStr.buffRead[2];
-//         for (int i = 0; i < length - 1; i++)
-//           check += serialStr.buffRead[i];
-
-//         if (check == serialStr.buffRead[length - 1]) {
-//           memcpy(serialStr.buffFinish, serialStr.buffRead, UART_FRAME_LENMAX);
-//           dataTransform();
-//         }
-
-//         serialStr.index = 0;
-//         serialStr.start = false;
-//       }
-//     }
+  void receiveCheck() {
+    if (!isOpen) {
+      return;
+    }
+    LibSerial::DataBuffer buff;
+    serialPort->Read(buff, UART_RX_SIZE, 0);
+    if (*buff.begin() == UART_FRAME_HEAD && *(buff.end()-1) == UART_FRAME_TAIL) {
+      uint8_t check = *(buff.end() - 2);
+      for (const uint8_t &i : buff) {
+        check ^= i;
+      }
+      if (check == *(buff.end() - 1)) {
+        memcpy(rxBuff.data, buff.data(), UART_RX_SIZE);
+        printf("%f", rxBuff.speed);
+      }
+      buff.clear();
+    } else {
+      serialPort->FlushInputBuffer();
+      buff.clear();
+    }
   }
 
   void carControl(float speed, uint16_t servo) {
@@ -204,11 +167,10 @@ public:
     }
     buff.xorCheck = check;
     LibSerial::DataBuffer lbuff;
-    for (uint8_t &i: buff.data) {
+    for (uint8_t &i : buff.data) {
       lbuff.emplace_back(i);
     }
     serialPort->Write(lbuff);
     this->buzzer = BUZZER_SLIENT;
-
   }
 };

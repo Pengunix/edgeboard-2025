@@ -1,6 +1,6 @@
 {
-    "speedLow": 0.8,
-    "speedHigh": 0.8,
+    "speedLow": 1.2,
+    "speedHigh": 1.2,
     "speedBridge": 0.8,
     "speedCatering": 0.6,
     "speedLayby": 0.6,

@@ -60,6 +60,8 @@ public:
     float runP3 = 0.0;          // 三阶比例系数：弯道控制量
     float turnP = 3.5;          // 一阶比例系数：转弯控制量
     float turnD = 3.5;          // 一阶微分系数：转弯控制量
+    float aim_distance;
+    uint16_t track_startline;
     bool debug = false;         // 调试模式使能
     bool saveImg = false;       // 存图使能
     uint16_t rowCutUp = 10;     // 图像顶部切行
@@ -79,7 +81,7 @@ public:
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(Params, speedLow, speedHigh, speedBridge,
                                    speedCatering, speedLayby, speedObstacle,
                                    speedParking, speedRing, speedDown, runP1,
-                                   runP2, runP3, turnP, turnD, debug, saveImg,
+                                   runP2, runP3, turnP, turnD, aim_distance,track_startline, debug, saveImg,
                                    rowCutUp, rowCutBottom, bridge, catering,
                                    layby, obstacle, parking, ring, cross, stop,
                                    score, model,
@@ -89,24 +91,52 @@ public:
   Params params;                   // 读取控制参数
   uint16_t servoPwm = PWMSERVOMID; // 发送给舵机的PWM
   float speed = 0.3;               // 发送给电机的速度
+
+  float pure_angle = 0, pure_angleLast = 0;
   /**
    * @brief 姿态PD控制器
    *
    * @param controlCenter 智能车控制中心
    */
-  void poseCtrl(int controlCenter) {
-    float error = (COLSIMAGE / 2) - controlCenter; // 图像控制中心转换偏差
-    static int errorLast = 0;                    // 记录前一次的偏差
-    if (abs(error - errorLast) > COLSIMAGE / 10) {
-      error = error > errorLast ? errorLast + COLSIMAGE / 10
-                                : errorLast - COLSIMAGE / 10;
-    }
+  void poseCtrl(ControlCenter controlCenter) {
+    // float error = (COLSIMAGE / 2) - controlCenter; // 图像控制中心转换偏差
+    // static int errorLast = 0;                    // 记录前一次的偏差
+    // if (abs(error - errorLast) > COLSIMAGE / 10) {
+    //   error = error > errorLast ? errorLast + COLSIMAGE / 10
+    //                             : errorLast - COLSIMAGE / 10;
+    // }
 
-    params.turnP = abs(error) * params.runP2 + params.runP1;
-    int pwmDiff = (error * params.turnP) + (error - errorLast) * params.turnD;
-    errorLast = error;
+    // params.turnP = abs(error) * params.runP2 + params.runP1;
+    // int pwmDiff = (error * params.turnP) + (error - errorLast) *
+    // params.turnD; errorLast = error;
 
-    servoPwm = (uint16_t)(PWMSERVOMID + pwmDiff); // PWM转换
+    // servoPwm = (uint16_t)(PWMSERVOMID + pwmDiff); // PWM转换
+    // 纯跟随
+    POINT car(ROWSIMAGE - 1, COLSIMAGE / 2 - 5);
+    // 计算远锚点偏差值 delta
+    float dy = controlCenter.centerEdge[controlCenter.aim_idx].x - car.x;
+    float dx = car.y - controlCenter.centerEdge[controlCenter.aim_idx].y;
+    float dn = sqrt(dx * dx + dy * dy);
+    pure_angle = atanf(pixel_per_meter * 2 * 0.3 * dx / dn / dn) / PI * 180;
+    // pure_angle -= 1;
+    // if(pure_angle>0) pure_angle += 2;//pure_angle *= left_scale;
+    // else pure_angle -= 1;//pure_angle *= right_scale;
+    // cout << pure_angle << endl;
+    int pwmDiff = 0;
+    pwmDiff = (pure_angle * params.turnP) +
+              (pure_angle - pure_angleLast) * params.turnD; //舵机PWM偏移量
+    pure_angleLast = pure_angle;
+
+    float pd_error =
+        COLSIMAGE / 2 - controlCenter.controlCenter; // 图像控制中心转换偏差
+    static int pd_errorLast = 0;                     // 记录前一次的偏差
+    int pd_pwmDiff = 0;
+    pd_pwmDiff = (pd_error * params.runP1) +
+                 (pd_error - pd_errorLast) * params.turnD; //舵机PWM偏移量
+    pd_errorLast = pd_error;
+
+    servoPwm =
+        (uint16_t)(PWMSERVOMID + 0.5 * pwmDiff + 0.5 * pd_pwmDiff); // PWM转换
   }
 
   /**

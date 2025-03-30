@@ -26,7 +26,7 @@ public:
    * @param pointsEdgeRight 赛道右边缘点集
    */
 
-  void fitting(Tracking &track, Scene scene) {
+  void fitting(Tracking &track, Scene scene, float aim_distance, uint16_t track_startline) {
     sigmaCenter = 0;
     controlCenter = COLSIMAGE / 2;
     centerEdge.clear();
@@ -121,50 +121,59 @@ public:
       // if (scene == Scene::RingScene && ringstep == 4 && R100) {
       if (false) {
         // if (ringleft == 1)
-        if (false)
+        if (false) {
           centerEdge = track_leftline(transformedPoints_Left, 5,
                                       0.225 * pixel_per_meter);
-        else
+          style = "LEFT";
+        } else {
           centerEdge = track_rightline(transformedPoints_Right, 5,
                                        0.225 * pixel_per_meter);
+          style = "RIGHT";
+        }
       } else {
-        if (left_num >= right_num)
+        if (left_num >= right_num) {
           centerEdge = track_leftline(transformedPoints_Left, 5,
                                       0.225 * pixel_per_meter);
-        else
+          style = "LEFT";
+        } else {
           centerEdge = track_rightline(transformedPoints_Right, 5,
                                        0.225 * pixel_per_meter);
+          style = "RIGHT";
+        }
       }
       speed_centeredge = centerEdge; //用作速度策略的中线
 
-      // 找最近点(起始点中线归一化)
-      POINT car(ROWSIMAGE - 1, COLSIMAGE / 2);
-      float min_dist = 1e10;
-      int begin_id = -1;
-      for (int i = 0; i < centerEdge.size(); i++) {
-        float dx = centerEdge[i].x - car.x;
-        float dy = centerEdge[i].y - car.y;
-        float dist = sqrt(dx * dx + dy * dy);
-        if (dist < min_dist) {
-          min_dist = dist;
-          begin_id = i;
-        }
-      }
-      centerEdge[begin_id].x = car.x;
-      centerEdge[begin_id].y = car.y;
-      centerEdge = resample_points(
-          std::vector<POINT>(centerEdge.begin() + begin_id, centerEdge.end()),
-          using_resample_dist * pixel_per_meter); //中线下采样
-
+      // // 找最近点(起始点中线归一化)
+      // POINT car(ROWSIMAGE - 1, COLSIMAGE / 2);
+      // float min_dist = 1e10;
+      // int begin_id = -1;
+      // for (int i = 0; i < centerEdge.size(); i++) {
+      //   float dx = centerEdge[i].x - car.x;
+      //   float dy = centerEdge[i].y - car.y;
+      //   float dist = sqrt(dx * dx + dy * dy);
+      //   if (dist < min_dist) {
+      //     min_dist = dist;
+      //     begin_id = i;
+      //   }
+      // }
+      // if (begin_id >= centerEdge.size() - 1) {
+      //   begin_id = 0;
+      // }
+      // centerEdge[begin_id].x = car.x;
+      // centerEdge[begin_id].y = car.y;
+      // centerEdge = resample_points(
+      //     std::vector<POINT>(centerEdge.begin() + begin_id, centerEdge.end()),
+      //     using_resample_dist * pixel_per_meter);
+      // //中线下采样
       centerEdge1 =
           track_rightline(transformedPoints_Right, 5, 0.225 * pixel_per_meter);
-      centerEdge1[begin_id].x = car.x;
-      centerEdge1[begin_id].y = car.y;
-      std::cout << "centerEdge1 size" << centerEdge1.size() << std::endl;
-      std::cout << "begin id" << begin_id << std::endl;
-      centerEdge1 = resample_points(
-          std::vector<POINT>(centerEdge1.begin() + begin_id, centerEdge1.end()),
-          using_resample_dist * pixel_per_meter); //中线下采样
+      // centerEdge1[begin_id].x = car.x;
+      // centerEdge1[begin_id].y = car.y;
+      // // std::cout << "centerEdge1 size" << centerEdge1.size() << std::endl;
+      // // std::cout << "begin id" << begin_id << std::endl;
+      // centerEdge1 = resample_points(
+      //     std::vector<POINT>(centerEdge1.begin() + begin_id, centerEdge1.end()),
+      //     using_resample_dist * pixel_per_meter);
 
       std::vector<cv::Point2f> pointsToTransform_center =
           convertPointsToCvPoints(centerEdge); //中线转为cvpoint
@@ -175,22 +184,21 @@ public:
 
       pointsToTransform_center =
           convertPointsToCvPoints(centerEdge1); //中线转为cvpoint
-      std::cout << "pointstoTrans size: " << pointsToTransform_center.size() << std::endl;
+      // std::cout << "pointstoTrans size: " << pointsToTransform_center.size()
+      // << std::endl;
       perspectiveTransform(pointsToTransform_center, transformedPoints,
                            inverse); //透视
       centerEdge_show1 =
           convertCvPointsToPoints(transformedPoints); //透视后中线转为POINT
 
-      // TODO: 变锚点距离
-      aim_idx = clip(round(0.1 / using_resample_dist), 0,
-                  centerEdge.size() - 1); //跟随点
+      aim_idx = clip(round(aim_distance / using_resample_dist), 0,
+                     centerEdge.size() - 1); //跟随点
       speed_aim_idx = clip(round(0.8 / using_resample_dist), 0,
                            centerEdge.size() - 1); //跟随点
 
       // 加权控制中心计算
       int controlNum = 1;
-      // TODO: 变计算起始行
-      int temp_point = 180;
+      int temp_point = track_startline;
       if (centerEdge[centerEdge.size() - 1].x > temp_point) {
         temp_point = centerEdge[centerEdge.size() - 1].x;
       }
@@ -238,8 +246,7 @@ public:
       // 加权控制中心计算
       int controlNum = 1;
 
-      // TODO: 变计算起始行
-      int temp_point = 100;
+      int temp_point = track_startline;
       if (centerEdge[centerEdge.size() - 1].x > temp_point) {
         temp_point = centerEdge[centerEdge.size() - 1].x;
       }
@@ -330,29 +337,32 @@ public:
     for (int i = 0; i < centerEdge.size(); i++) {
       if (centerEdge_show[i].x >= 0 && centerEdge_show[i].x < ROWSIMAGE &&
           centerEdge_show[i].y >= 0 && centerEdge_show[i].y < COLSIMAGE) {
-        if (i == aim_idx)
+        if (i == aim_idx) {
           circle(centerImage,
                  cv::Point(centerEdge_show[i].y, centerEdge_show[i].x), 3,
-                 cv::Scalar(128, 0, 255), -1);
-        else
+                 cv::Scalar(0, 0, 0), -1);
+        } else {
           circle(centerImage,
                  cv::Point(centerEdge_show[i].y, centerEdge_show[i].x), 1,
-                 cv::Scalar(0, 128, 255), -1);
+                 cv::Scalar(255, 255, 255), -1);
+        }
       }
       if (centerEdge_show1[i].x >= 0 && centerEdge_show1[i].x < ROWSIMAGE &&
           centerEdge_show1[i].y >= 0 && centerEdge_show1[i].y < COLSIMAGE) {
-        if (i == aim_idx)
+        if (i == aim_idx) {
           circle(centerImage,
                  cv::Point(centerEdge_show1[i].y, centerEdge_show1[i].x), 3,
                  cv::Scalar(128, 0, 255), -1);
-        circle(centerImage,
-               cv::Point(centerEdge_show1[i].y, centerEdge_show1[i].x), 1,
-               cv::Scalar(0, 128, 255), -1);
+        } else {
+          circle(centerImage,
+                 cv::Point(centerEdge_show1[i].y, centerEdge_show1[i].x), 1,
+                 cv::Scalar(255, 128, 255), -1);
+        }
       }
     }
 
     // 绘制加权控制中心：方向
-    cv::Rect rect(controlCenter, ROWSIMAGE - 20, 10, 20);
+    cv::Rect rect(controlCenter, ROWSIMAGE - 20, 5, 20);
     rectangle(centerImage, rect, cv::Scalar(0, 0, 255), CV_FILLED);
 
     // 详细控制参数显示
@@ -376,9 +386,9 @@ public:
   }
 
 private:
-  int countOutlineA = 0;  // 车辆脱轨检测计数器
-  int countOutlineB = 0;  // 车辆脱轨检测计数器
-  std::string style = ""; // 赛道类型
+  int countOutlineA = 0; // 车辆脱轨检测计数器
+  int countOutlineB = 0; // 车辆脱轨检测计数器
+  std::string style;     // 赛道类型
   /**
    * @brief 搜索十字赛道突变行（左下）
    *

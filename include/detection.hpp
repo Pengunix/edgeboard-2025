@@ -28,12 +28,12 @@ public:
    *
    * @param pathModel
    */
-  Detection(const std::string pathModel) {
+  Detection(const std::string pathModel="./model", const std::string pathConfig="./config") {
     // 模型初始化
     this->predictor_nna_ =
-        std::make_shared<PPNCPredictor>("../src/config/config_ppncnna.json");
+        std::make_shared<PPNCPredictor>(pathConfig+"/config_ppncnna.json");
     this->predictor_nms_ =
-        std::make_shared<PPNCPredictor>("../src/config/config_ppncnms.json");
+        std::make_shared<PPNCPredictor>(pathConfig+"/config_ppncnms.json");
     this->onnx_env_ =
         Ort::Env(OrtLoggingLevel::ORT_LOGGING_LEVEL_WARNING, "test");
     Ort::SessionOptions session_options;

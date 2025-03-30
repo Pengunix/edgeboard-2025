@@ -72,7 +72,7 @@ public:
     try {
       serialPort->Open(portName);
       // 设置波特率
-      serialPort->SetBaudRate(LibSerial::BaudRate::BAUD_500000);
+      serialPort->SetBaudRate(LibSerial::BaudRate::BAUD_460800);
       // 8位数据位
       serialPort->SetCharacterSize(LibSerial::CharacterSize::CHAR_SIZE_8);
       // 无流控

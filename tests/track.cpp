@@ -61,15 +61,15 @@ int main() {
     }
 
     //[12] 环岛识别与路径规划
-    if ((scene == Scene::NormalScene || scene == Scene::RingScene) &&
-        motion.params.ring) {
-      if (ring.process(track, imageBin)) {
-        scene = Scene::RingScene;
-      } else {
-        scene = Scene::NormalScene;
-      }
-    }
-    ctrlCent.fitting(track, scene);
+    // if ((scene == Scene::NormalScene || scene == Scene::RingScene) &&
+    //     motion.params.ring) {
+    //   if (ring.process(track, imageBin)) {
+    //     scene = Scene::RingScene;
+    //   } else {
+    //     scene = Scene::NormalScene;
+    //   }
+    // }
+    ctrlCent.fitting(track, scene, motion.params.aim_distance, motion.params.track_startline);
 
     if (ctrlCent.derailmentCheck(track)) {
       uart->carControl(0, PWMSERVOMID); // 控制车辆停止运动
@@ -84,7 +84,7 @@ int main() {
     }
 
     ctrlCent.drawImage(track, imageBGR);
-    motion.poseCtrl(ctrlCent.controlCenter);
+    motion.poseCtrl(ctrlCent);
 
     if (motion.servoPwm > PWMSERVOMAX) {
       motion.servoPwm = PWMSERVOMAX;
@@ -99,7 +99,7 @@ int main() {
                             std::chrono::system_clock::now().time_since_epoch())
                             .count();
     frameTime = FrameEndTime - FrameStartTime;
-
+    // spdlog::info("Frame time {} ", frameTime);
     sceneLast = scene;
     if (scene == Scene::CrossScene) {
       scene = Scene::NormalScene;
@@ -114,7 +114,7 @@ int main() {
 
     cv::imshow("Test", imageBGR);
     savePicture(imageBGR);
-    cv::waitKey(1);
+    // cv::waitKey(1);
   }
 
   return 0;

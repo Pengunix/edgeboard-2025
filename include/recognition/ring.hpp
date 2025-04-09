@@ -1,24 +1,46 @@
 #pragma once
 #include "common.hpp"
 #include "recognition/tracking.hpp"
+enum RingStep {
+  None = 0, // 未知类型
+  Verifing,
+  Waiting,
+  Entering, // 入环
+  Inside,   // 环中
+  Exiting,  // 出环
+  Finish    // 环任务结束
+};
 
+/**
+ * @brief 环岛类型
+ *
+ */
+enum RingType {
+  RingNone = 0, // 未知类型
+  RingLeft,     // 左入环岛
+  RingRight     // 右入环岛
+};
 
 class Ring {
 public:
+  RingStep ringStep = RingStep::None; // 环岛处理阶段
+
+  RingType ringType = RingType::RingLeft; // 环岛类型
+  uint8_t ringNum = 0;
   uint16_t counterShield = 0; // 环岛检测屏蔽计数器：屏蔽车库误检测
+  bool R100 = false;
 
   /**
    * @brief 环岛识别初始化|复位
    *
    */
   void reset(void) {
-    ringType = RingType::RingLeft; // 环岛类型
-    ringStep = RingStep::None;     // 环岛处理阶段
-    rowRepairLine = 0;                  // 用于环补线的点（行号）
-    colRepairLine = 0;                  // 用于环补线的点（列号）
+    RingType ringType = RingType::RingLeft; // 环岛类型
+    RingStep ringStep = RingStep::None;     // 环岛处理阶段
+    int rowRepairLine = 0;                  // 用于环补线的点（行号）
+    int colRepairLine = 0;                  // 用于环补线的点（列号）
     counterSpurroad = 0;                    // 岔路计数器
     counterShield = 0;
-    countExitRing = 0;
   }
   /**
    * @brief 环岛识别与行径规划
@@ -26,457 +48,562 @@ public:
    * @param track 基础赛道识别结果
    * @param imagePath 赛道路径图像
    */
-  bool process(Tracking &track, cv::Mat &imagePath) {
-    if (counterShield < 40) {
-      counterShield++;
-      return false;
-    }
+  bool ringRecognition(Tracking &track, uint8_t ringSum, uint8_t *ringEnter,
+                       const std::vector<int> &RoadWidth) {
+    // std::cout << ringStep << std::endl;
+    // std::cout << track.stdevLeft << " " << track.stdevRight << std::endl;
+    if (ringStep == RingStep::None) {
+      // 左环
+      if (track.stdevRight < 15 && track.stdevLeft > 20) {
+        uint8_t right_sum = 0;  //右边线数目
+        uint8_t left_cnt = 0;   //判断增减趋势
+        uint8_t left_state = 0; // 0:增, 1:减
+        uint8_t left_edge = 0;  //左丢线数目
+        int cnt[3] = {0, 0, 0};
+        for (int i = 2; i < track.widthBlock.size(); i += 2) {
+          if (track.pointsEdgeRight[i].y <= track.pointsEdgeRight[i - 2].y &&
+              track.pointsEdgeRight[i - 2].y < COLSIMAGE - 3) {
+            right_sum++;
+          } else
+            right_sum = 0;
 
-    bool ringEnable = false;                    // 判环标志
-    RingType ringTypeTemp = RingType::RingNone; // 环岛类型：临时变量
-    int rowBreakpointLeft = 0;  // 边缘拐点起始行（左）
-    int rowBreakpointRight = 0; // 边缘拐点起始行（右）
-    int colEnterRing = 0;       // 入环点（图像列序号）
-    int rowRepairRingside =
-        track.widthBlock.size() - 1; // 环一侧，补线起点（行号）
-    int rowRepairStraightside =
-        track.widthBlock.size() - 1; // 直道侧，补线起点（行号）
-    int rowYendStraightside =
-        track.widthBlock.size() - 1; // 直道侧，延长补线终点（行号）
-    _index = 0;
-    _ringPoint = POINT(0, 0);
-
-    // 算环用布线的候选点
-    rowRepairLine = std::max(rowRepairLine - 5, 0);
-    if (ringStep == RingStep::Entering && !track.spurroad.empty()) {
-      if (ringType == RingType::RingLeft && track.pointsEdgeLeft.size() > 20) {
-        for (size_t j = static_cast<size_t>(std::max(rowRepairLine - 30, 10));
-             j < track.pointsEdgeLeft.size() - 10 && j < static_cast<size_t>(rowRepairLine) + 30 &&
-             track.pointsEdgeLeft[j].x >= track.spurroad[0].x;
-             j++) {
-          if (track.pointsEdgeLeft[j].y > track.pointsEdgeLeft[j - 10].y &&
-              track.pointsEdgeLeft[j].y > track.pointsEdgeLeft[j + 10].y) {
-            rowRepairLine = j;
-            break;
-          }
-        }
-      } else if (ringType == RingType::RingRight &&
-                 track.pointsEdgeRight.size() > 20) {
-        for (size_t j = std::max(rowRepairLine - 30, 10);
-             j < track.pointsEdgeRight.size() - 10 && j < static_cast<size_t>(rowRepairLine) + 30 &&
-             track.pointsEdgeRight[j].x >= track.spurroad[0].x;
-             j++) {
-          if (track.pointsEdgeRight[j].y < track.pointsEdgeRight[j - 10].y &&
-              track.pointsEdgeRight[j].y < track.pointsEdgeRight[j + 10].y) {
-            rowRepairLine = j;
-            break;
-          }
-        }
-      }
-    }
-
-    // 搜索赛道左右边缘满足图像边沿的最高处
-    for (size_t ii = 0; ii < track.pointsEdgeLeft.size(); ++ii) {
-      rowBreakpointLeft = track.pointsEdgeLeft[ii].x;
-      if (track.pointsEdgeLeft[ii].y > 2)
-        break;
-    }
-    for (size_t ii = 0; ii < track.pointsEdgeRight.size(); ++ii) {
-      rowBreakpointRight = track.pointsEdgeRight[ii].x;
-      if (track.pointsEdgeRight[ii].y < COLSIMAGE - 3)
-        break;
-    }
-
-    // 判环
-    int countWide = 0; // 环岛入口变宽区域行数
-    for (size_t i = 1; i < track.widthBlock.size(); ++i) {
-      if (track.widthBlock[i].y > track.widthBlock[i - 1].y &&
-          track.widthBlock[i].y > COLSIMAGE * 0.6 &&
-          track.widthBlock[i].x > 30 &&
-          ((track.stdevLeft > 120 && track.stdevRight < 50) ||
-           ringStep == RingStep::Entering)) // 搜索突然变宽的路径行数
-      {
-        ++countWide;
-      } else {
-        countWide = 0;
-      }
-      // [1] 入环判断
-      if ((ringStep == RingStep::None || ringStep == RingStep::Entering) &&
-          countWide >= 5 && !track.spurroad.empty()) {
-        if (ringTypeTemp == RingType::RingNone) // 环岛方向判定
-        {
-          int tmp_flag = 0;
-          for (size_t j = 0; j < track.spurroad.size(); j++) {
-            if (track.spurroad[j].x < track.pointsEdgeLeft[i - 5].x) {
-              tmp_flag = 1;
+          if (left_state == 0) {
+            if (track.pointsEdgeLeft[i].y <= 3) //丢线
+            {
+              cnt[0]++; // 25
+            }
+            if (track.pointsEdgeLeft[i - 2].y <= 3 &&
+                track.pointsEdgeLeft[i].y <= 20 &&
+                track.pointsEdgeLeft[i].y > 3) {
+              left_state++;
+            }
+          } else if (left_state == 1) {
+            if (track.pointsEdgeLeft[i].y >
+                track.pointsEdgeLeft[i - 2].y + 1) //左边线向中间增
+            {
+              cnt[1]++; // 5
+            }
+            if (track.pointsEdgeLeft[i].y < track.pointsEdgeLeft[i - 2].y - 1) {
+              left_state++;
+            }
+          } else if (left_state == 2) {
+            if (track.pointsEdgeLeft[i].y <
+                track.pointsEdgeLeft[i - 2].y - 1) //左边线向中间增
+            {
+              cnt[2]++;
             }
           }
-          if (tmp_flag == 0) {
-            countWide = 0;
-            continue;
+        }
+        // printf("%d %d %d %d\n", left_state,left_cnt,right_sum,left_edge );
+        // printf("%d %d %d %d\n", cnt[0], cnt[1], cnt[2], left_edge);
+        // params[0]=left_state;params[1]=left_cnt;params[2]=right_sum;params[3]=left_edge;
+        if (right_sum > 60 &&
+            ((cnt[0] > 5 && cnt[0] < 20 && cnt[1] > 10 && cnt[1] < 45 &&
+              cnt[2] > 0 && track.stdevLeft < 70) ||
+             (cnt[0] > 25 && cnt[1] > 10 && cnt[2] > 3 &&
+              track.stdevLeft > 80))) {
+          if ((cnt[0] > 5 && cnt[0] < 20 && cnt[1] > 10 && cnt[1] < 45 &&
+               cnt[2] > 0 && track.stdevLeft < 70)) {
+            R100 = true;
+          } else {
+            R100 = false;
           }
-          if (track.pointsEdgeLeft[i].y < track.pointsEdgeLeft[i - 5].y) {
-            ringTypeTemp = RingType::RingLeft; // 环岛类型：左入环
-            colEnterRing = track.pointsEdgeLeft[i - 5].y; // 入环点列号
-            _ringPoint.x = track.pointsEdgeLeft[i - 5].x;
-            _ringPoint.y = track.pointsEdgeLeft[i - 5].y;
+          ringStep = RingStep::Verifing;
+          ringType = RingType::RingLeft;
+        }
+      }
 
-            rowRepairLine = i; // 用于环补线的行号
-            colRepairLine = track.pointsEdgeLeft[i].x; // 用于环补线的列号
-          } else if (track.pointsEdgeRight[i].y >
-                     track.pointsEdgeRight[i - 5].y) {
-            ringTypeTemp = RingType::RingRight; // 环岛类型：右入环
-            colEnterRing = track.pointsEdgeRight[i - 5].y; // 入环点列号
-            rowRepairLine = i; // 用于环补线的行号
-            colRepairLine = track.pointsEdgeRight[i].x; // 用于环补线的列号
+      // 右环
+      if (track.stdevLeft < 15 && track.stdevRight > 20) {
+        uint8_t left_sum = 0;
+        uint8_t right_cnt = 0;
+        uint8_t right_state = 0;
+        uint8_t right_edge = 0;
+        int cnt[3] = {0, 0, 0};
+        for (int i = 2; i < track.widthBlock.size(); i += 2) {
+          //  if(track.pointsEdgeLeft[i].y - track.pointsEdgeLeft[i-2].y > 10)
+          //  {left_sum=0;break;}
+
+          if (track.pointsEdgeLeft[i].y >= track.pointsEdgeLeft[i - 2].y &&
+              track.pointsEdgeLeft[i].y > 3) {
+            left_sum++;
+          } else
+            left_sum = 0;
+
+          if (right_state == 0) {
+            if (track.pointsEdgeRight[i].y >= COLSIMAGE - 3) //丢线
+            {
+              cnt[0]++;
+            }
+            if (track.pointsEdgeRight[i - 2].y >= COLSIMAGE - 3 &&
+                track.pointsEdgeRight[i].y >= COLSIMAGE - 20 &&
+                track.pointsEdgeRight[i].y < COLSIMAGE - 3) {
+              right_state++;
+            }
+          } else if (right_state == 1) {
+            if (track.pointsEdgeRight[i].y <
+                track.pointsEdgeRight[i - 2].y - 1) //右边线向中间增
+            {
+              cnt[1]++;
+            }
+            if (track.pointsEdgeRight[i].y >
+                track.pointsEdgeRight[i - 2].y + 1) {
+              right_state++;
+            }
+          } else if (right_state == 2) {
+            if (track.pointsEdgeRight[i].y >
+                track.pointsEdgeRight[i - 2].y + 1) //右边线向右边减
+            {
+              cnt[2]++;
+            }
           }
         }
 
-        // 内圆检测
-        if ((ringTypeTemp == RingType::RingLeft &&
-             colEnterRing - track.pointsEdgeLeft[i].y >= 3) ||
-            (ringTypeTemp == RingType::RingRight &&
-             track.pointsEdgeRight[i].y - colEnterRing >= 3)) {
-          ringEnable = true;
+        //       printf("%d %d %d %d %d\n",right_cnt,
+        //       right_state,right_cnt,left_sum,right_edge );
+        // params[0]=right_state;params[1]=right_cnt;params[2]=left_sum;params[3]=right_edge;
+        if (left_sum > 60 &&
+            ((cnt[0] > 5 && cnt[0] < 20 && cnt[1] > 10 && cnt[1] < 45 &&
+              cnt[2] > 0 && track.stdevRight < 70) ||
+             (cnt[0] > 25 && cnt[1] > 10 && cnt[2] > 3 &&
+              track.stdevRight > 80))) {
+          if ((cnt[0] > 5 && cnt[0] < 20 && cnt[1] > 10 && cnt[1] < 45 &&
+               cnt[2] > 0 && track.stdevRight < 70)) {
+            R100 = true;
+          } else {
+            R100 = false;
+          }
+          ringStep = RingStep::Verifing;
+          ringType = RingType::RingRight;
+        }
+      }
+    }
+
+    else if (ringStep == RingStep::Verifing) {
+      if (ringType == RingType::RingLeft) {
+        if (track.stdevRight > 15) {
+          ringStep = RingStep::None;
+          return false;
+        }
+        int fixline = 0;
+        int state = 0;
+        int cnt[3] = {0, 0, 0};
+        for (int i = 2; i < track.pointsEdgeLeft.size(); i++) {
+          if (state == 0) {
+            if (track.pointsEdgeLeft[i].y >
+                track.pointsEdgeLeft[i - 2].y) //左边线向中间增
+            {
+              cnt[0]++;
+            }
+            if (track.pointsEdgeLeft[i].y < track.pointsEdgeLeft[i - 2].y)
+              state++;
+          }
+          if (state == 1) {
+            if (track.pointsEdgeLeft[i].y <
+                track.pointsEdgeLeft[i - 2].y) //减 //3
+            {
+              cnt[1]++;
+            }
+            if (track.pointsEdgeLeft[i].y <= 3)
+              state++;
+          }
+          if (state == 2) //丢线
+          {
+            if (track.pointsEdgeLeft[i].y <= 3)
+              cnt[2]++;
+          }
+        }
+        // printf("%d %d %d\n", cnt[0], cnt[1], cnt[2]);
+        if (!R100 && cnt[0] > 5 && cnt[1] > 3 && cnt[2] >= 2)
+          ringStep = RingStep::Waiting;
+        if (R100 && cnt[0] > 40 && cnt[1] > 20 && cnt[2] >= 1)
+          ringStep = RingStep::Inside;
+
+        if (ringStep == RingStep::Verifing) {
+          for (int i = 0; i < track.pointsEdgeLeft.size(); i++) {
+            track.pointsEdgeLeft[i].y =
+                track.pointsEdgeRight[i].y - RoadWidth[i];
+          }
+        }
+      } else if (ringType == RingType::RingRight) {
+        if (track.stdevLeft > 15) {
+          ringStep = RingStep::None;
+          return false;
+        }
+        int fixline = 0;
+        int state = 0;
+        int cnt[3] = {0, 0, 0};
+        for (int i = 2; i < track.pointsEdgeRight.size(); i++) {
+          if (state == 0) {
+            if (track.pointsEdgeRight[i].y <
+                track.pointsEdgeRight[i - 2].y) //右边线向中间减
+            {
+              cnt[0]++;
+            }
+            if (track.pointsEdgeRight[i].y > track.pointsEdgeRight[i - 2].y)
+              state++;
+          }
+          if (state == 1) {
+            if (track.pointsEdgeRight[i].y > track.pointsEdgeRight[i - 2].y) {
+              cnt[1]++;
+            }
+            if (track.pointsEdgeRight[i].y >= COLSIMAGE - 3)
+              state++;
+          }
+          if (state == 2) {
+            if (track.pointsEdgeRight[i].y >= COLSIMAGE - 3)
+              cnt[2]++;
+          }
+        }
+        // printf("%d %d %d\n", cnt[0], cnt[1], cnt[2]);
+        if (!R100 && cnt[0] > 5 && cnt[1] > 3 && cnt[2] >= 2)
+          ringStep = RingStep::Waiting;
+        if (R100 && cnt[0] > 40 && cnt[1] > 20 && cnt[2] >= 1)
+          ringStep = RingStep::Inside;
+
+        if (ringStep == RingStep::Verifing) {
+          for (int i = 0; i < track.pointsEdgeRight.size(); i++) {
+            track.pointsEdgeRight[i].y =
+                track.pointsEdgeLeft[i].y + RoadWidth[i];
+          }
+        }
+      }
+    }
+
+    else if (ringStep == RingStep::Waiting) {
+      if (ringType == RingType::RingLeft) {
+        if (track.stdevRight > 15) {
+          ringStep = RingStep::None;
+          return false;
+        }
+        int fixline = 0;
+        int whitecnt = 0;
+        bool search = true;
+        POINT endpoint = POINT(0, 0);
+
+        for (int i = 0; i < track.pointsEdgeLeft.size(); i++) {
+          if (track.pointsEdgeLeft[i].y < 200 &&
+              track.pointsEdgeLeft[i].y > track.pointsEdgeLeft[fixline].y)
+            fixline = i;
+          if (search && whitecnt > 5 && track.pointsEdgeLeft[i].y >= 3)
+            search = false;
+          if (search && track.pointsEdgeLeft[i].x < 85 &&
+              track.pointsEdgeLeft[i].y < 3) {
+            endpoint = track.pointsEdgeLeft[i];
+            whitecnt++;
+          }
+        }
+
+        if (!search && endpoint.x > ringEnter[ringNum]) {
           ringStep = RingStep::Entering;
-          ringType = ringTypeTemp;
-          if (static_cast<size_t>(rowRepairStraightside) == track.widthBlock.size() - 1) {
-            rowRepairStraightside = i - countWide;
+          EnteringCounter = 0;
+        }
+
+        if (ringStep == RingStep::Waiting) {
+          for (int i = 0; i < track.pointsEdgeLeft.size(); i++) {
+            track.pointsEdgeLeft[i].y =
+                track.pointsEdgeRight[i].y - RoadWidth[i];
+          }
+        }
+      } else if (ringType == RingType::RingRight) {
+        if (track.stdevLeft > 15) {
+          ringStep = RingStep::None;
+          return false;
+        }
+        int fixline = 0;
+        int whitecnt = 0;
+        bool search = true;
+        POINT endpoint = POINT(0, COLSIMAGE - 1);
+
+        for (int i = 0; i < track.pointsEdgeRight.size(); i++) {
+          if (track.pointsEdgeRight[i].y >= 120 &&
+              track.pointsEdgeRight[i].y < track.pointsEdgeRight[fixline].y)
+            fixline = i;
+          if (search && whitecnt > 5 &&
+              track.pointsEdgeRight[i].y <= COLSIMAGE - 4)
+            search = false;
+          if (search && track.pointsEdgeRight[i].x < 85 &&
+              track.pointsEdgeRight[i].y > COLSIMAGE - 4) {
+            endpoint = track.pointsEdgeRight[i];
+            whitecnt++;
+          }
+        }
+
+        if (!search && endpoint.x > ringEnter[ringNum]) {
+          ringStep = RingStep::Entering;
+          EnteringCounter = 0;
+        }
+
+        if (ringStep == RingStep::Waiting) {
+          for (int i = 0; i < track.pointsEdgeRight.size(); i++) {
+            track.pointsEdgeRight[i].y =
+                track.pointsEdgeLeft[i].y + RoadWidth[i];
+          }
+        }
+      }
+    } else if (ringStep == RingStep::Entering) {
+      if (ringType == RingType::RingLeft) {
+        //     EnteringCounter ++;  //入环计数器
+        //   printf("%d %d\n", track.pointsEdgeRight.size(),
+        //   track.pointsEdgeRight[10].y);
+        if ((track.pointsEdgeRight.size() < 180 &&
+             track.pointsEdgeRight[10].y <
+                 COLSIMAGE - 20) /* || track.pointsEdgeRight.size() < 140*/
+            /*|| EnteringCounter > 40*/) {
+          ringStep = RingStep::Inside;
+        }
+
+        //补线
+        if (ringStep == RingStep::Entering) {
+          int whitecnt = 0;
+          POINT endpoint = POINT(0, 0);
+          for (int i = 0; i < track.pointsEdgeLeft.size(); i++) {
+            if (whitecnt > 50 && track.pointsEdgeLeft[i].y >= 3)
+              break;
+            if (track.pointsEdgeLeft[i].x < 160 &&
+                track.pointsEdgeLeft[i].y < 3) {
+              endpoint = track.pointsEdgeLeft[i];
+              whitecnt++;
+            }
+          }
+          POINT start = POINT(ROWSIMAGE - 31, COLSIMAGE - 31);
+          POINT end = POINT(endpoint.x, endpoint.y);
+          //  POINT end = POINT(track.pointsEdgeLeft[i].x,
+          //  track.pointsEdgeLeft[i].y);
+          POINT middle =
+              POINT((start.x + end.x) * 0.3, (start.y + end.y) * 0.7);
+          std::vector<POINT> input = {start, middle, end};
+          track.pointsEdgeRight = Bezier(0.02, input);
+
+          track.pointsEdgeLeft.clear();
+          for (int i = 0; i < track.pointsEdgeRight.size(); i++) {
+            track.pointsEdgeLeft.push_back(
+                POINT(track.pointsEdgeRight[i].x, 0));
+          }
+        }
+      } else if (ringType == RingType::RingRight) {
+        // EnteringCounter ++;
+        //    printf("%d %d\n", track.pointsEdgeLeft.size(),
+        //    track.pointsEdgeLeft[10].y);
+        if ((track.pointsEdgeLeft.size() < 180 &&
+             track.pointsEdgeLeft[10].y >
+                 20) /*|| track.pointsEdgeLeft.size() < 140*/
+            /* || EnteringCounter > 40*/) {
+          ringStep = RingStep::Inside;
+        }
+
+        if (ringStep == RingStep::Entering) {
+          int whitecnt = 0;
+          POINT endpoint = POINT(0, COLSIMAGE - 1);
+
+          for (int i = 0; i < track.pointsEdgeRight.size(); i++) {
+            if (whitecnt > 50 && track.pointsEdgeRight[i].y <= COLSIMAGE - 4)
+              break;
+            if (track.pointsEdgeRight[i].x < 160 &&
+                track.pointsEdgeRight[i].y > COLSIMAGE - 4) {
+              endpoint = track.pointsEdgeRight[i];
+              whitecnt++;
+            }
+          }
+
+          POINT start = POINT(ROWSIMAGE - 31, 30);
+          POINT end = POINT(endpoint.x, endpoint.y);
+          POINT middle =
+              POINT((start.x + end.x) * 0.3, (start.y + end.y) * 0.3);
+          std::vector<POINT> input = {start, middle, end};
+          track.pointsEdgeLeft = Bezier(0.02, input);
+
+          track.pointsEdgeRight.clear();
+          for (int i = 0; i < track.pointsEdgeLeft.size(); i++) {
+            track.pointsEdgeRight.push_back(
+                POINT(track.pointsEdgeLeft[i].x, COLSIMAGE - 1));
+          }
+        }
+      }
+    } else if (ringStep == RingStep::Inside) {
+      //  printf("Inside\n");
+      if (ringType == RingType::RingLeft) {
+        if (R100) {
+          static bool In = false;
+          if (!In && track.stdevRight > 28)
+            In = true;
+          if (In && track.stdevRight > 1 && track.stdevRight < 10) {
+            In = false;
+            ringStep = RingStep::None;
+            ringType = RingType::RingNone;
+            ringNum = (ringNum + 1) % ringSum;
           }
         } else {
-          countWide = 0;
+          uint8_t right_cnt = 0;
+          uint8_t right_state = 0;
+
+          for (int i = 2; i < track.pointsEdgeRight.size(); i += 2) {
+            if (!right_state) {
+              if (track.pointsEdgeRight[i].y > track.pointsEdgeRight[i - 2].y) {
+                right_cnt++;
+                right_state = 1;
+              }
+            } else {
+              if (track.pointsEdgeRight[i].y > track.pointsEdgeRight[i - 2].y ||
+                  track.pointsEdgeRight[i].y > COLSIMAGE - 5) {
+                right_cnt++;
+              }
+            }
+          }
+          if (right_cnt > 20) {
+            ringStep = RingStep::Exiting;
+          }
         }
+        //    printf("%d %d\n",right_state,  right_cnt);
+      } else if (ringType == RingType::RingRight) {
+        if (R100) {
+          static bool In = false;
+          if (!In && track.stdevLeft > 28)
+            In = true;
+          if (In && track.stdevLeft > 1 && track.stdevLeft < 10) {
+            In = false;
+            ringStep = RingStep::None;
+            ringType = RingType::RingNone;
+            ringNum = (ringNum + 1) % ringSum;
+          }
+        } else {
+          uint8_t left_cnt = 0;
+          uint8_t left_state = 0;
+
+          for (int i = 2; i < track.pointsEdgeLeft.size(); i += 2) {
+            if (!left_state) {
+              if (track.pointsEdgeLeft[i].y < track.pointsEdgeLeft[i - 2].y) {
+                left_cnt++;
+                left_state = 1;
+              }
+            } else {
+              if (track.pointsEdgeLeft[i].y < track.pointsEdgeLeft[i - 2].y ||
+                  track.pointsEdgeLeft[i].y < 4) {
+                left_cnt++;
+              }
+            }
+          }
+          if (left_cnt > 20) {
+            ringStep = RingStep::Exiting;
+          }
+        }
+        //    printf("%d %d\n",left_state,  left_cnt);
       }
-      /*if(ringStep == RingStep::Entering && ringEnable == false){
-          ringEnable = true;
-          rowRepairStraightside = rowRepairLine;
-      }*/
-
-      if (ringEnable == true && ringStep == RingStep::Entering) {
-        if (ringTypeTemp == RingType::RingLeft) {
-          if (track.pointsEdgeLeft[i].y <= 2 &&
-              i != track.widthBlock.size() - 1) {
-            if (static_cast<size_t>(rowRepairRingside) == track.widthBlock.size() - 1) {
-              rowRepairRingside = i;
-            }
-            rowYendStraightside = track.pointsEdgeLeft[i].x;
-          } else if (static_cast<size_t>(rowRepairRingside) != track.widthBlock.size() - 1) {
-
-            int x = track.pointsEdgeLeft[rowRepairStraightside].x +
-                    (rowYendStraightside -
-                     track.pointsEdgeRight[rowRepairStraightside].x) *
-                        5 / 4;
-            int y = (track.pointsEdgeLeft[rowRepairStraightside].y +
-                     track.pointsEdgeRight[rowRepairStraightside].y) /
-                    2;
-
-            POINT startPoint =
-                track.pointsEdgeRight[rowRepairStraightside]; // 补线：起点
-            POINT midPoint(x, y);                             // 补线：中点
-            POINT endPoint(rowYendStraightside, 0);           // 补线：终点
-
-            std::vector<POINT> input = {startPoint, midPoint, endPoint};
-            std::vector<POINT> b_modify = Bezier(0.01, input);
-            track.pointsEdgeLeft.resize(rowRepairRingside);
-            track.pointsEdgeRight.resize(rowRepairStraightside);
-            for (size_t kk = 0; kk < b_modify.size(); ++kk) {
-              track.pointsEdgeRight.emplace_back(b_modify[kk]);
-            }
+    } else if (ringStep == RingStep::Exiting) {
+      //   printf("Exiting\n");
+      if (ringType == RingType::RingLeft) {
+        int whitecnt = 0;
+        int stage = 0;
+        bool left_leave = false;
+        for (int i = 2; i < track.pointsEdgeRight.size(); i += 2) {
+          if (track.pointsEdgeRight[i].y > COLSIMAGE - 4)
+            whitecnt++; //右丢线
+          if (stage == 0 &&
+              track.pointsEdgeRight[i].y < track.pointsEdgeRight[i - 2].y)
+            stage++; //
+          if (stage == 1 &&
+              track.pointsEdgeRight[i].y > track.pointsEdgeRight[i - 2].y) {
+            stage++;
             break;
           }
         }
-      }
-    }
-
-    int tmp_ttttt = 0;
-    if (ringEnable == false && ringStep == RingStep::Entering) {
-      // 本场没判出环，且没有分叉
-      if (!track.spurroad.empty() && static_cast<size_t>(rowRepairLine) < track.pointsEdgeRight.size() - 1 &&
-          rowBreakpointRight > ROWSIMAGE / 2) {
-
-        rowRepairStraightside = rowRepairLine;
-
-        if (ringType == RingType::RingLeft) {
-          tmp_ttttt = 1;
-          for (size_t i = rowRepairLine; i < track.pointsEdgeLeft.size() - 1;
-               i++) {
-            if (track.pointsEdgeLeft[i].y <= 2 &&
-                i != track.widthBlock.size() - 1) {
-              rowRepairRingside = i;
-              break;
-            }
-          }
-
-          for (size_t i = rowRepairRingside; i < track.pointsEdgeLeft.size() - 1;
-               i++) {
-            if (track.pointsEdgeLeft[i].y <= 2 &&
-                i != track.widthBlock.size() - 1) {
-              rowYendStraightside = track.pointsEdgeLeft[i].x;
-            } else if (static_cast<size_t>(rowRepairRingside) != track.widthBlock.size() - 1) {
-              int x = track.pointsEdgeLeft[rowRepairStraightside].x +
-                      (rowYendStraightside -
-                       track.pointsEdgeRight[rowRepairStraightside].x) *
-                          5 / 4;
-              int y = (track.pointsEdgeLeft[rowRepairStraightside].y +
-                       track.pointsEdgeRight[rowRepairStraightside].y) /
-                      2;
-
-              POINT startPoint =
-                  track.pointsEdgeRight[rowRepairStraightside]; // 补线：起点
-              POINT midPoint(x, y);                   // 补线：中点
-              POINT endPoint(rowYendStraightside, 0); // 补线：终点
-
-              // for (int i = 0; i < track.spurroad.size(); i++)
-              // {
-              //     if (track.spurroad[i].y < startPoint.y &&
-              //     track.spurroad[i].x < startcv::Point.x)
-              //         endPoint = track.spurroad[i];
-              //     break;
-              // }
-
-              std::vector<POINT> input = {startPoint, midPoint, endPoint};
-              std::vector<POINT> b_modify = Bezier(0.02, input);
-              track.pointsEdgeLeft.resize(rowRepairRingside);
-              track.pointsEdgeRight.resize(rowRepairStraightside);
-
-              for (size_t kk = 0; kk < b_modify.size(); ++kk) {
-                track.pointsEdgeRight.emplace_back(b_modify[kk]);
-              }
-              break;
-            }
-          }
+        for (int i = 2; i < track.pointsEdgeLeft.size(); i += 2) {
+          if (!left_leave && track.pointsEdgeLeft[i].y > 3 &&
+              track.pointsEdgeLeft[i - 2].y < 3)
+            left_leave = true;
         }
-      }
-      // 本场没判出环，有分叉
-      else {
-        if (ringType == RingType::RingLeft &&
-            track.pointsEdgeRight.size() > 1) {
-          tmp_ttttt = 2;
-          int x_end = track.pointsEdgeRight[track.pointsEdgeRight.size() - 1].x;
-          for (size_t kkk = track.pointsEdgeRight[track.pointsEdgeRight.size() - 1].x;
-            kkk < static_cast<size_t>(track.pointsEdgeRight[track.pointsEdgeRight.size() - 1].x + 50);
-               kkk++) {
-            if (imagePath.at<cv::Vec3b>(kkk, 0)[2] > 0) {
-              x_end = kkk;
-              break;
-            }
-          }
 
-          POINT startPoint(ROWSIMAGE - 10, COLSIMAGE - 1); // 补线：起点
-          POINT endPoint(x_end, 0);                        // 补线：终点
-
-          // for (int i = 0; i < track.spurroad.size(); i++)
-          // {
-          //     if (track.spurroad[i].y < startPoint.y && track.spurroad[i].x <
-          //     startPoint.x)
-          //         endPoint = track.spurroad[i];
-          //     break;
-          // }
-          POINT midPoint =
-              POINT((startPoint.x + endPoint.x) * 0.5,
-                    (startPoint.y + endPoint.y) * 0.5); // 补线：中点
-          std::vector<POINT> input = {startPoint, midPoint, endPoint};
-          std::vector<POINT> b_modify = Bezier(0.02, input);
-          track.pointsEdgeRight.resize(0);
-          track.pointsEdgeLeft.resize(0);
-          for (size_t kk = 0; kk < b_modify.size(); ++kk) {
-            track.pointsEdgeRight.emplace_back(b_modify[kk]);
-          }
-        }
-      }
-    }
-    // 环中
-    if (ringStep == RingStep::Entering && track.spurroad.empty() &&
-        counterSpurroad >= 3) {
-      ringStep = RingStep::Inside;
-    }
-    // 出环补线
-    if (ringStep == RingStep::Inside) {
-      if (ringType == RingType::RingLeft) {
-        int rowBreakRight = 0; // 右边缘横坐标连续性(行号)
-        for (size_t i = 0; i < track.pointsEdgeRight.size(); i += 3) {
-          if (track.pointsEdgeRight[i].y <=
-              track.pointsEdgeRight[rowBreakRight].y) {
-            rowBreakRight = i;
-            continue;
-          }
-          if (i > static_cast<size_t>(rowBreakRight) &&
-              track.pointsEdgeRight[i].y -
-                      track.pointsEdgeRight[rowBreakRight].y >
-                  5) {
-            rowBreakpointRight = rowBreakRight;
-            break; // 寻找到出环口：出环补线
-          }
-        }
-        track.pointsEdgeLeft.resize(0); // 单边控制
-
-        if (!track.pointsEdgeRight.empty() &&
-            track.pointsEdgeRight[rowBreakRight].y < COLSIMAGE / 4) {
-          track.pointsEdgeRight.resize(rowBreakRight); // 前80列不需要补线
-        } else if (track.pointsEdgeRight.size() - rowBreakRight > 20) {
-          float slopeTop = 0;    // 斜率：分歧点上半部分
-          float slopeButtom = 0; // 斜率：分歧点下半部分
-          if (track.pointsEdgeRight[rowBreakRight].x !=
-              track.pointsEdgeRight[0].x) {
-            slopeButtom = (track.pointsEdgeRight[rowBreakRight].y -
-                           track.pointsEdgeRight[0].y) *
-                          100 /
-                          (track.pointsEdgeRight[rowBreakRight].x -
-                           track.pointsEdgeRight[0].x);
-          }
-          if (track.pointsEdgeRight[rowBreakRight].x !=
-              track.pointsEdgeRight[rowBreakRight + 20].x) {
-            slopeTop = (track.pointsEdgeRight[rowBreakRight + 20].y -
-                        track.pointsEdgeRight[rowBreakRight].y) *
-                       100 /
-                       (track.pointsEdgeRight[rowBreakRight + 20].x -
-                        track.pointsEdgeRight[rowBreakRight].x);
-          }
-
-          if (slopeButtom * slopeTop <= 0) {
-            rowBreakpointLeft = track.pointsEdgeRight[track.validRowsLeft].x;
-            POINT p_end(rowBreakpointLeft, 0); // 补线终点为左边有效行顶点
-            POINT p_mid(
-                (track.pointsEdgeRight[rowBreakRight].x + rowBreakpointLeft) *
-                    3 / 8,
-                track.pointsEdgeRight[rowBreakRight].y / 2);
-            std::vector<POINT> input = {track.pointsEdgeRight[rowBreakRight], p_mid,
-                                   p_end};
-            std::vector<POINT> b_modify = Bezier(0.01, input);
-            track.pointsEdgeRight.resize(rowBreakRight);
-            for (size_t kk = 0; kk < b_modify.size(); ++kk) {
-              track.pointsEdgeRight.emplace_back(b_modify[kk]);
-            }
-          }
-        } else if (track.pointsEdgeRight.size() - rowBreakRight <= 20) {
-          _index = 2;
-          POINT p_end(rowBreakpointLeft, 0);
-          POINT p_start(std::max(rowBreakpointRight, ROWSIMAGE - 80), COLSIMAGE);
-          POINT p_mid((ROWSIMAGE - 50 + rowBreakpointLeft) / 4, COLSIMAGE / 2);
-          std::vector<POINT> input = {p_start, p_mid, p_end};
-          std::vector<POINT> b_modify = Bezier(0.01, input);
-          track.pointsEdgeRight.resize(0);
-          for (size_t kk = 0; kk < b_modify.size(); ++kk) {
-            track.pointsEdgeRight.emplace_back(b_modify[kk]);
-          }
-        }
-      } else {
-        ;
-      }
-      if (std::max(rowBreakpointLeft, rowBreakpointRight) <
-          ROWSIMAGE / 2) // 出环判定
-      {
-        countExitRing++;
-        if (countExitRing > 5) {
-          countExitRing = 0;
-          ringStep = RingStep::Exiting;
-        }
-      }
-    }
-    // 出环完成
-    else if (ringStep == RingStep::Exiting) {
-      if (ringType == RingType::RingLeft && rowBreakpointLeft < ROWSIMAGE / 2) {
-        POINT p_end(rowBreakpointLeft, 0);
-        POINT p_start(ROWSIMAGE - 50, COLSIMAGE - 1);
-        POINT p_mid((ROWSIMAGE - 50 + rowBreakpointLeft) * 3 / 8,
-                    COLSIMAGE / 2);
-        std::vector<POINT> input = {p_start, p_mid, p_end};
-        std::vector<POINT> b_modify = Bezier(0.01, input);
-        track.pointsEdgeRight.resize(0);
-        track.pointsEdgeLeft.resize(0);
-        for (size_t kk = 0; kk < b_modify.size(); ++kk) {
-          track.pointsEdgeRight.emplace_back(b_modify[kk]);
-        }
-        if (rowBreakpointRight > ROWSIMAGE / 2) {
-          countExitRing++;
-          if (countExitRing > 3) {
-            countExitRing = 0;
-            ringStep = RingStep::Finish;
-          }
-        }
-      }
-    }
-
-    // //清掉边界的edge点
-    // std::vector<POINT> v_temp, v_temp2;
-    // for (int jj = 0; jj < track.pointsEdgeLeft.size(); ++jj)
-    // {
-    //     if (track.pointsEdgeLeft[jj].y > 2)
-    //     {
-    //         v_temp.push_back(track.pointsEdgeLeft[jj]);
-    //     }
-    //     else
-    //     {
-    //         if (jj > track.pointsEdgeLeft.size() * 9 / 10)
-    //         {
-    //             break;
-    //         }
-    //     }
-
-    //     if (track.pointsEdgeLeft[jj].y > COLSIMAGE * 9 / 10 && jj <
-    //     track.pointsEdgeLeft.size() - 5)
-    //     {
-    //         break;
-    //     }
-    // }
-    // track.pointsEdgeLeft = v_temp;
-    // if (track.pointsEdgeLeft.size() < 5)
-    // {
-    //     track.pointsEdgeLeft.resize(0);
-    // }
-
-    // for (int jj = 0; jj < track.pointsEdgeRight.size(); ++jj)
-    // {
-    //     if (track.pointsEdgeRight[jj].y < COLSIMAGE - 3)
-    //     {
-    //         v_temp2.push_back(track.pointsEdgeRight[jj]);
-    //     }
-    //     else
-    //     {
-    //         if (jj > track.pointsEdgeRight.size() * 9 / 10)
-    //         {
-    //             break;
-    //         }
-    //     }
-    //     if (track.pointsEdgeRight[jj].y < COLSIMAGE / 10 && jj <
-    //     track.pointsEdgeRight.size() - 5)
-    //     {
-    //         break;
-    //     }
-    // }
-    // track.pointsEdgeRight = v_temp2;
-    // if (track.pointsEdgeRight.size() < 5)
-    // {
-    //     track.pointsEdgeRight.resize(0);
-    // }
-
-    // 出环，切回正常循迹
-    if (ringStep == RingStep::Finish) {
-      if (track.pointsEdgeLeft.size() > 30 &&
-          track.pointsEdgeRight.size() > 30 &&
-          abs(track.pointsEdgeRight.size() - track.pointsEdgeLeft.size() <
-              track.pointsEdgeRight.size() / 3)) {
-        countExitRing++;
-        if (countExitRing > 20)
+        if (stage == 1 && track.stdevRight < 50 && track.stdevRight > 0 &&
+            (whitecnt < 10 || left_leave)) {
           ringStep = RingStep::None;
+          ringType = RingType::RingNone;
+          ringNum = (ringNum + 1) % ringSum;
+        }
+
+        if (ringStep == RingStep::Exiting) {
+          POINT endpoint = POINT(120, 0); // tag
+          for (int i = track.pointsEdgeLeft.size() - 1; i >= 0; i--) {
+            if (track.pointsEdgeLeft[i].y < 3) {
+              endpoint.x = track.pointsEdgeLeft[i].x;
+              break;
+            }
+          }
+
+          POINT start = POINT(ROWSIMAGE - 30, COLSIMAGE - 31); // tag
+          POINT end = POINT(endpoint.x, endpoint.y);
+          POINT middle =
+              POINT((start.x + end.x) * 0.4, (start.y + end.y) * 0.6);
+          std::vector<POINT> input = {start, middle, end};
+          track.pointsEdgeRight = Bezier(0.02, input);
+
+          track.pointsEdgeLeft.clear();
+          for (int i = 0; i < track.pointsEdgeRight.size(); i++) {
+            track.pointsEdgeLeft.push_back(
+                POINT(track.pointsEdgeRight[i].x, 0));
+          }
+        }
+      } else if (ringType == RingType::RingRight) {
+        int whitecnt = 0;
+        int stage = 0;
+        int right_leave = false;
+        for (int i = 2; i < track.pointsEdgeLeft.size(); i += 2) {
+          if (track.pointsEdgeLeft[i].y < 3)
+            whitecnt++;
+          if (stage == 0 &&
+              track.pointsEdgeLeft[i].y > track.pointsEdgeLeft[i - 2].y)
+            stage++;
+          if (stage == 1 &&
+              track.pointsEdgeLeft[i].y < track.pointsEdgeLeft[i - 2].y) {
+            stage++;
+            break;
+          }
+        }
+
+        for (int i = 2; i < track.pointsEdgeRight.size(); i += 2) {
+          if (!right_leave && track.pointsEdgeRight[i].y < COLSIMAGE - 3 &&
+              track.pointsEdgeRight[i - 2].y > COLSIMAGE - 3)
+            right_leave = true;
+        }
+
+        if (stage == 1 && track.stdevLeft < 50 && track.stdevLeft > 0 &&
+            (whitecnt < 10 || right_leave)) {
+          ringStep = RingStep::None;
+          ringType = RingType::RingNone;
+          ringNum = (ringNum + 1) % ringSum;
+        }
+
+        if (ringStep == RingStep::Exiting) {
+          POINT endpoint = POINT(120, COLSIMAGE - 1); // tag
+          for (int i = track.pointsEdgeRight.size() - 1; i >= 0; i--) {
+            if (track.pointsEdgeRight[i].y > COLSIMAGE - 4) {
+              endpoint.x = track.pointsEdgeRight[i].x;
+              break;
+            }
+          }
+
+          POINT start = POINT(ROWSIMAGE - 30, 30); // tag
+          POINT end = POINT(endpoint.x, endpoint.y);
+          POINT middle =
+              POINT((start.x + end.x) * 0.4, (start.y + end.y) * 0.4);
+          std::vector<POINT> input = {start, middle, end};
+          track.pointsEdgeLeft = Bezier(0.02, input);
+
+          track.pointsEdgeRight.clear();
+          for (int i = 0; i < track.pointsEdgeLeft.size(); i++) {
+            track.pointsEdgeRight.push_back(
+                POINT(track.pointsEdgeLeft[i].x, COLSIMAGE - 1));
+          }
+        }
       }
     }
 
-    if (track.spurroad.empty())
-      counterSpurroad++;
-    else
-      counterSpurroad = 0;
-
-    //--------------------------------临时测试----------------------------------
-    _ringStep = ringStep;
-    _ringEnable = ringEnable;
-    _tmp_ttttt = tmp_ttttt;
-
-    // 返回识别结果
-    if (ringStep == RingStep::None)
+    if (ringStep == RingStep::None) {
       return false;
-    else
+    } else {
+      //      printf("-----------环岛 %d %d %d\n", ringStep,
+      //      track.pointsEdgeRight.size(), track.pointsEdgeRight[10].y);
       return true;
+    }
   }
 
   /**
@@ -485,82 +612,65 @@ public:
    * @param ringImage 需要叠加显示的图像
    */
   void drawImage(Tracking track, cv::Mat &ringImage) {
-    for (size_t i = 0; i < track.pointsEdgeLeft.size(); i++) {
-      circle(ringImage,
-             cv::Point(track.pointsEdgeLeft[i].y, track.pointsEdgeLeft[i].x), 2,
-             cv::Scalar(0, 255, 0), -1); // 绿色点
-    }
+    // for (int i = 0; i < track.pointsEdgeLeft.size(); i++)
+    // {
+    //     circle(ringImage, Point(track.pointsEdgeLeft[i].y,
+    //     track.pointsEdgeLeft[i].x), 2,
+    //            Scalar(0, 255, 0), -1); // 绿色点
+    // }
+    // for (int i = 0; i < track.pointsEdgeRight.size(); i++)
+    // {
+    //     circle(ringImage, Point(track.pointsEdgeRight[i].y,
+    //     track.pointsEdgeRight[i].x), 2,
+    //            Scalar(0, 255, 255), -1); // 黄色点
+    // }
 
-    for (size_t i = 0; i < track.pointsEdgeRight.size(); i++) {
-      circle(ringImage,
-             cv::Point(track.pointsEdgeRight[i].y, track.pointsEdgeRight[i].x), 2,
-             cv::Scalar(0, 255, 255), -1); // 黄色点
-    }
+    // for (int i = 0; i < track.spurroad.size(); i++)
+    // {
+    //     circle(ringImage, Point(track.spurroad[i].y, track.spurroad[i].x), 5,
+    //            Scalar(0, 0, 255), -1); // 红色点
+    // }
 
-    for (size_t i = 0; i < track.spurroad.size(); i++) {
-      circle(ringImage, cv::Point(track.spurroad[i].y, track.spurroad[i].x), 5,
-             cv::Scalar(0, 0, 255), -1); // 红色点
-    }
+    // putText(ringImage, to_string(_ringStep) + " " + to_string(_ringEnable) +
+    // " " + to_string(_tmp_ttttt),
+    //         Point(COLSIMAGE - 80, ROWSIMAGE - 20), cv::FONT_HERSHEY_TRIPLEX,
+    //         0.3, cv::Scalar(0, 0, 255), 1, CV_AA);
 
-    putText(ringImage,
-            std::to_string(_ringStep) + " " + std::to_string(_ringEnable) + " " +
-                std::to_string(_tmp_ttttt),
-            cv::Point(COLSIMAGE - 80, ROWSIMAGE - 20), cv::FONT_HERSHEY_TRIPLEX,
-            0.3, cv::Scalar(0, 0, 255), 1, CV_AA);
+    // putText(ringImage, to_string(_index), Point(80, ROWSIMAGE - 20),
+    // cv::FONT_HERSHEY_TRIPLEX, 0.3, cv::Scalar(0, 0, 255), 1, CV_AA);
 
-    putText(ringImage, std::to_string(_index), cv::Point(80, ROWSIMAGE - 20),
-            cv::FONT_HERSHEY_TRIPLEX, 0.3, cv::Scalar(0, 0, 255), 1, CV_AA);
+    // putText(ringImage, to_string(track.validRowsRight) + " | " +
+    // to_string(track.stdevRight),
+    //         Point(COLSIMAGE - 100, ROWSIMAGE - 50),
+    //         FONT_HERSHEY_TRIPLEX, 0.3, Scalar(0, 0, 255), 1, CV_AA);
+    // putText(ringImage, to_string(track.validRowsLeft) + " | " +
+    // to_string(track.stdevLeft),
+    //         Point(30, ROWSIMAGE - 50), FONT_HERSHEY_TRIPLEX, 0.3, Scalar(0,
+    //         0, 255), 1, CV_AA);
 
-    putText(ringImage,
-            std::to_string(track.validRowsRight) + " | " +
-                std::to_string(track.stdevRight),
-            cv::Point(COLSIMAGE - 100, ROWSIMAGE - 50), cv::FONT_HERSHEY_TRIPLEX, 0.3,
-            cv::Scalar(0, 0, 255), 1, CV_AA);
-    putText(ringImage,
-            std::to_string(track.validRowsLeft) + " | " + std::to_string(track.stdevLeft),
-            cv::Point(30, ROWSIMAGE - 50), cv::FONT_HERSHEY_TRIPLEX, 0.3,
-            cv::Scalar(0, 0, 255), 1, CV_AA);
-
-    putText(ringImage, "[7] RING - ENABLE", cv::Point(COLSIMAGE / 2 - 30, 10),
-            cv::FONT_HERSHEY_TRIPLEX, 0.3, cv::Scalar(0, 255, 0), 1, CV_AA);
-    circle(ringImage, cv::Point(_ringPoint.y, _ringPoint.x), 4, cv::Scalar(255, 0, 0),
-           -1); // 红色点
+    // putText(ringImage, "[7] RING - ENABLE", Point(COLSIMAGE / 2 - 30, 10),
+    // cv::FONT_HERSHEY_TRIPLEX, 0.3, cv::Scalar(0, 255, 0), 1, CV_AA);
+    // circle(ringImage, Point(_ringPoint.y, _ringPoint.x), 4, Scalar(255, 0,
+    // 0), -1); // 红色点
   }
 
 private:
+  float distance = 0;
   uint16_t counterSpurroad = 0; // 岔路计数器
   // 临时测试用参数
   int _ringStep;
   int _ringEnable;
   int _tmp_ttttt;
   int _index = 0;
-  int countExitRing = 0;
   POINT _ringPoint = POINT(0, 0);
-
-  /**
-   * @brief 环岛类型
-   *
-   */
-  enum RingType {
-    RingNone = 0, // 未知类型
-    RingLeft,     // 左入环岛
-    RingRight     // 右入环岛
-  };
 
   /**
    * @brief 环岛运行步骤/阶段
    *
    */
-  enum RingStep {
-    None = 0, // 未知类型
-    Entering, // 入环
-    Inside,   // 环中
-    Exiting,  // 出环
-    Finish    // 环任务结束
-  };
 
-  RingType ringType = RingType::RingLeft; // 环岛类型
-  RingStep ringStep = RingStep::None;     // 环岛处理阶段
-  int rowRepairLine = 0;                  // 用于环补线的点（行号）
-  int colRepairLine = 0;                  // 用于环补线的点（列号）
+  int rowRepairLine = 0; // 用于环补线的点（行号）
+  int colRepairLine = 0; // 用于环补线的点（列号）
+
+  uint8_t EnteringCounter = 0;
 };

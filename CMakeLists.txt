@@ -35,7 +35,6 @@ link_directories(${PPNC_LIBRARY_DIRS})
 pkg_search_module(ONNX REQUIRED onnx)
 include_directories(${ONNX_INCLUDE_DIRS})
 link_directories(${ONNX_LIBRARY_DIRS})
-
 #---------------------------------------------------------------------
 #       [ Target  : Binary ] ==> [ Tests ]
 #---------------------------------------------------------------------
@@ -43,6 +42,7 @@ add_subdirectory(${PROJECT_SOURCE_DIR}/spdlog)
 
 set(TEST_NAME Track)
 add_executable(${TEST_NAME} ${PROJECT_SOURCE_DIR}/tests/track.cpp)
+target_precompile_headers(${TEST_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/include/json.hpp ${PROJECT_SOURCE_DIR}/include/controlcenter.hpp)
 target_link_libraries(
         ${TEST_NAME}
         ${PPNC_LIBRARIES}
@@ -71,7 +71,7 @@ install(TARGETS ${TEST_NAME}
         LIBRARY DESTINATION lib
 )
 install(FILES
-        # PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
+        # PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_WRITE GROUP_EXECUTE WORLD_READ WORLD_WRITE WORLD_EXECUTE
         # 此配置文件包含模型路径，自行选择是否使用其中的路径
         ${PROJECT_SOURCE_DIR}/config/config.json
         # ppnc的推理库必须使用这两个配置文件，此文件设置了nms和deploy_paddle动态库路径

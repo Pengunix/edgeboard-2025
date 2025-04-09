@@ -139,7 +139,7 @@ void savePicture(cv::Mat &image) {
   counter++;
   std::string imgPath = "./samples/";
   name = imgPath + std::to_string(counter) + ".jpg";
-  imwrite(name, image);
+  cv::imwrite(name, image);
 }
 
 //--------------------------------------------------[公共方法]----------------------------------------------------
@@ -475,14 +475,14 @@ cv::Mat draw_boundary_ipm(std::vector<POINT> left_edge,
   cv::Size imageSize(320, 240);
   cv::Mat only_boundary = cv::Mat::zeros(imageSize, CV_8UC1);
   // invcv::Mat_auto=invcv::Mat_auto.inv();
-  perspectiveTransform(pointsToTransform_left, transformedPoints, invMat);
+  cv::perspectiveTransform(pointsToTransform_left, transformedPoints, invMat);
   for (size_t i = 0; i < transformedPoints.size(); i++) {
     cv::circle(only_boundary, transformedPoints[i], 0,
                cv::Scalar(255, 255, 255), 2);
   }
   left_edge = convertCvPointsToPoints(transformedPoints);
 
-  perspectiveTransform(pointsToTransform_right, transformedPoints, invMat);
+  cv::perspectiveTransform(pointsToTransform_right, transformedPoints, invMat);
   for (size_t i = 0; i < transformedPoints.size(); i++) {
     cv::circle(only_boundary, transformedPoints[i], 0,
                cv::Scalar(255, 255, 255), 2);

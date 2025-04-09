@@ -1,4 +1,3 @@
-#include "main.hpp"
 #include "uart.hpp"
 #include "unistd.h"
 

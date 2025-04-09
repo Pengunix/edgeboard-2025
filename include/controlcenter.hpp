@@ -2,6 +2,8 @@
 #include "common.hpp"
 #include "recognition/tracking.hpp"
 
+#define BOUNDARY_SHOW 0
+
 class ControlCenter {
 public:
   int controlCenter; // 智能车控制中心（0~320）
@@ -26,7 +28,8 @@ public:
    * @param pointsEdgeRight 赛道右边缘点集
    */
 
-  void fitting(Tracking &track, Scene scene, float aim_distance, uint16_t track_startline) {
+  void fitting(Tracking &track, Scene scene, float aim_distance,
+               uint16_t track_startline, int ringstep, bool R100, int ringtype) {
     sigmaCenter = 0;
     controlCenter = COLSIMAGE / 2;
     centerEdge.clear();
@@ -38,18 +41,18 @@ public:
     if (scene == Scene::NormalScene || scene == Scene::CrossScene ||
         scene == Scene::ParkingScene || scene == Scene::RingScene ||
         scene == Scene::LaybyScene || scene == Scene::BridgeScene) {
-#if 1
+#if BOUNDARY_SHOW
       // 逆透视图像
       cv::Mat only_boundary =
           cv::Mat::zeros(cv::Size(COLSIMAGE, ROWSIMAGE), CV_8UC1);
 
+#endif
       std::vector<cv::Point2f> pointsToTransform_left = convertPointsToCvPoints(
                                    track.pointsEdgeLeft),
                                pointsToTransform_right =
                                    convertPointsToCvPoints(
                                        track.pointsEdgeRight),
                                transformedPoints;
-#endif
       // 防止点集为空导致逆透视throw
       if (pointsToTransform_left.size() < 5 ||
           pointsToTransform_left.size() > 200)
@@ -80,10 +83,10 @@ public:
                           using_resample_dist * pixel_per_meter); //下采样
       transformedPoints_Right = resample_points(
           transformedPoints_Right, using_resample_dist * pixel_per_meter);
-#if 1
       // 逆透视图像绘制
       // 画左边线
       transformedPoints = convertPointsToCvPoints(transformedPoints_Left);
+#if BOUNDARY_SHOW
       for (size_t i = 0; i < transformedPoints.size(); i++) {
         circle(only_boundary, transformedPoints[i], 0,
                cv::Scalar(255, 255, 255), 2);
@@ -117,11 +120,10 @@ public:
             right_num++;
         }
       }
-      // TODO: 循线环岛
-      // if (scene == Scene::RingScene && ringstep == 4 && R100) {
-      if (false) {
-        // if (ringleft == 1)
-        if (false) {
+      // 4 RingType Inside
+      if (scene == Scene::RingScene && ringstep == 4 && R100) {
+        // LEFT
+        if (ringtype == 1) {
           centerEdge = track_leftline(transformedPoints_Left, 5,
                                       0.225 * pixel_per_meter);
           style = "LEFT";
@@ -162,8 +164,8 @@ public:
       // centerEdge[begin_id].x = car.x;
       // centerEdge[begin_id].y = car.y;
       // centerEdge = resample_points(
-      //     std::vector<POINT>(centerEdge.begin() + begin_id, centerEdge.end()),
-      //     using_resample_dist * pixel_per_meter);
+      //     std::vector<POINT>(centerEdge.begin() + begin_id,
+      //     centerEdge.end()), using_resample_dist * pixel_per_meter);
       // //中线下采样
       centerEdge1 =
           track_rightline(transformedPoints_Right, 5, 0.225 * pixel_per_meter);
@@ -172,8 +174,8 @@ public:
       // // std::cout << "centerEdge1 size" << centerEdge1.size() << std::endl;
       // // std::cout << "begin id" << begin_id << std::endl;
       // centerEdge1 = resample_points(
-      //     std::vector<POINT>(centerEdge1.begin() + begin_id, centerEdge1.end()),
-      //     using_resample_dist * pixel_per_meter);
+      //     std::vector<POINT>(centerEdge1.begin() + begin_id,
+      //     centerEdge1.end()), using_resample_dist * pixel_per_meter);
 
       std::vector<cv::Point2f> pointsToTransform_center =
           convertPointsToCvPoints(centerEdge); //中线转为cvpoint
@@ -184,8 +186,6 @@ public:
 
       pointsToTransform_center =
           convertPointsToCvPoints(centerEdge1); //中线转为cvpoint
-      // std::cout << "pointstoTrans size: " << pointsToTransform_center.size()
-      // << std::endl;
       perspectiveTransform(pointsToTransform_center, transformedPoints,
                            inverse); //透视
       centerEdge_show1 =
@@ -222,7 +222,7 @@ public:
         sigmaCenter = sigma(centerV);
       } else
         sigmaCenter = 1000;
-#if 1
+#if BOUNDARY_SHOW
       // 逆透视边缘图像
       for (size_t i = 0; i < pointsToTransform_center.size(); i++) {
         if (i == aim_idx)

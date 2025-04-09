@@ -28,7 +28,7 @@ public:
    *
    * @param pathModel
    */
-  Detection(const std::string pathModel="./model", const std::string pathConfig="./config") {
+  Detection(const std::string pathModel="./model/yolov3_mobilenet_v1", const std::string pathConfig="./config") {
     // 模型初始化
     this->predictor_nna_ =
         std::make_shared<PPNCPredictor>(pathConfig+"/config_ppncnna.json");

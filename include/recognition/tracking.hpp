@@ -1,15 +1,15 @@
 #pragma once
 #include "common.hpp"
 
-int long_col = 0;
+// int long_col = 0;
 
 class Tracking {
 public:
   std::vector<POINT> pointsEdgeLeft;  // 赛道左边缘点集
   std::vector<POINT> pointsEdgeRight; // 赛道右边缘点集
 
-  std::vector<POINT> pointsEdgeLeft_Seed;  // 赛道左边缘点集
-  std::vector<POINT> pointsEdgeRight_Seed; // 赛道右边缘点集
+  // std::vector<POINT> pointsEdgeLeft_Seed;  // 赛道左边缘点集
+  // std::vector<POINT> pointsEdgeRight_Seed; // 赛道右边缘点集
 
   std::vector<POINT> widthBlock;    // 色块宽度=终-起（每行）
   std::vector<POINT> spurroad;      // 保存岔路信息
@@ -340,7 +340,7 @@ public:
         }
         if (temp_counter_white > counter_white) {
           counter_white = temp_counter_white;
-          long_col = col;
+          // long_col = col;
           //     printf("%d\n", long_col);
         }
       }

@@ -1,7 +1,6 @@
 #pragma once
 #include "common.hpp"
 #include "controlcenter.hpp"
-#include "json.hpp"
 
 /**
  * @brief 运动控制器
@@ -29,14 +28,14 @@ public:
     try {
       params = js_value.get<Params>();
     } catch (const nlohmann::detail::exception &e) {
-      spdlog::critical("[motion] json parse error!");
+      spdlog::critical("[motion] json parse error! {}", e.what());
       exit(-1);
     }
 
     speed = params.speedLow;
-    spdlog::info("[motion] runP1: {} | runP2: {} | runP3: {}", params.runP1,
-                 params.runP2, params.runP3);
-    spdlog::info("[motion] turnP: {} | turnD: {}", params.turnP, params.turnD);
+    spdlog::info("[motion] NormP: {} | NormD: {}", params.NormP,
+                 params.NormD);
+    spdlog::info("[motion] pd_P: {} | pd_D: {}", params.pd_P, params.pd_D);
     spdlog::info("[motion] speedLow: {}  | speedHigh: {}", params.speedLow,
                  params.speedHigh);
   };
@@ -46,51 +45,74 @@ public:
    *
    */
   struct Params {
-    float speedLow = 0.8;       // 智能车最低速
-    float speedHigh = 0.8;      // 智能车最高速
-    float speedBridge = 0.6;    // 坡道速度
-    float speedCatering = 0.6;  // 快餐店速度
-    float speedLayby = 0.6;     // 临时停车区速度
-    float speedObstacle = 0.6;  // 障碍区速度
-    float speedParking = 0.6;   // 停车场速度
-    float speedRing = 0.6;      // 环岛速度
-    float speedDown = 0.5;      // 特殊区域降速速度
-    float runP1 = 0.9;          // 一阶比例系数：直线控制量
-    float runP2 = 0.018;        // 二阶比例系数：弯道控制量
-    float runP3 = 0.0;          // 三阶比例系数：弯道控制量
-    float turnP = 3.5;          // 一阶比例系数：转弯控制量
-    float turnD = 3.5;          // 一阶微分系数：转弯控制量
+    float speedLow = 0.0;      // 智能车最低速
+    float speedHigh = 0.0;     // 智能车最高速
+    float speedBridge = 0.0;   // 坡道速度
+    float speedCatering = 0.0; // 快餐店速度
+    float speedLayby = 0.0;    // 临时停车区速度
+    float speedObstacle = 0.0; // 障碍区速度
+    float speedParking = 0.0;  // 停车场速度
+    float speedRing = 0.0;     // 环岛速度
+    float speedDown = 0.0;     // 特殊区域降速速度
+
+    float pd_P = 0.0;
+    float pd_D = 0.0;
+
+    float NormP = 0.0;
+    float NormD = 0.0;
+
+    float alpha = 0.0;
+
+    uint8_t ringSum = 0;
+    uint8_t ringEnter0 = 0;
+    float ringP0 = 0.0;
+    float ringD0 = 0.0;
+    uint8_t ringEnter1 = 0;
+    float ringP1 = 0.0;
+    float ringD1 = 0.0;
+    uint8_t ringEnter2 = 0;
+    float ringP2 = 0.0;
+    float ringD2 = 0.0;
+    uint8_t ringEnter3 = 0;
+    float ringP3 = 0.0;
+    float ringD3 = 0.0;
+
     float aim_distance;
     uint16_t track_startline;
-    bool debug = false;         // 调试模式使能
-    bool saveImg = false;       // 存图使能
-    uint16_t rowCutUp = 10;     // 图像顶部切行
-    uint16_t rowCutBottom = 10; // 图像顶部切行
-    bool bridge = true;         // 坡道区使能
-    bool catering = true;       // 快餐店使能
-    bool layby = true;          // 临时停车区使能
-    bool obstacle = true;       // 障碍区使能
-    bool parking = true;        // 停车场使能
-    bool ring = true;           // 环岛使能
-    bool cross = true;          // 十字道路使能
-    bool stop = true;           // 停车区使能
 
-    float score = 0.5;                                      // AI检测置信度
+    float pl = 0.0;
+    float ph = 0.0;
+
+    bool debug = false;        // 调试模式使能
+    bool saveImg = false;      // 存图使能
+    uint16_t rowCutUp = 0;     // 图像顶部切行
+    uint16_t rowCutBottom = 0; // 图像顶部切行
+    bool bridge = true;        // 坡道区使能
+    bool catering = true;      // 快餐店使能
+    bool layby = true;         // 临时停车区使能
+    bool obstacle = true;      // 障碍区使能
+    bool parking = true;       // 停车场使能
+    bool ring = true;          // 环岛使能
+    bool cross = true;         // 十字道路使能
+    bool stop = true;          // 停车区使能
+
+    float score = 0.0;                                      // AI检测置信度
     std::string model = "../res/model/yolov3_mobilenet_v1"; // 模型路径
     std::string video = "../res/samples/demo.mp4";          // 视频路径
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Params, speedLow, speedHigh, speedBridge,
-                                   speedCatering, speedLayby, speedObstacle,
-                                   speedParking, speedRing, speedDown, runP1,
-                                   runP2, runP3, turnP, turnD, aim_distance,track_startline, debug, saveImg,
-                                   rowCutUp, rowCutBottom, bridge, catering,
-                                   layby, obstacle, parking, ring, cross, stop,
-                                   score, model,
-                                   video); // 添加构造函数
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(
+        Params, speedLow, speedHigh, speedBridge, speedCatering, speedLayby,
+        speedObstacle, speedParking, speedRing, speedDown, pd_P, pd_D,
+        NormP, NormD, alpha, ringSum, ringEnter0, ringP0, ringD0, ringEnter1,
+        ringP1, ringD1, ringEnter2, ringP2, ringD2, ringEnter3, ringP3, ringD3,
+        aim_distance, track_startline, pl, ph, debug, saveImg, rowCutUp,
+        rowCutBottom, bridge, catering, layby, obstacle, parking, ring, cross,
+        stop, score, model,
+        video); // 添加构造函数
   };
 
   Params params;                   // 读取控制参数
   uint16_t servoPwm = PWMSERVOMID; // 发送给舵机的PWM
-  float speed = 0.3;               // 发送给电机的速度
+  float speed = 0.0;               // 发送给电机的速度
 
   float pure_angle = 0, pure_angleLast = 0;
   /**
@@ -98,41 +120,32 @@ public:
    *
    * @param controlCenter 智能车控制中心
    */
-  void poseCtrl(ControlCenter controlCenter) {
-    // float error = (COLSIMAGE / 2) - controlCenter; // 图像控制中心转换偏差
-    // static int errorLast = 0;                    // 记录前一次的偏差
-    // if (abs(error - errorLast) > COLSIMAGE / 10) {
-    //   error = error > errorLast ? errorLast + COLSIMAGE / 10
-    //                             : errorLast - COLSIMAGE / 10;
-    // }
-
-    // params.turnP = abs(error) * params.runP2 + params.runP1;
-    // int pwmDiff = (error * params.turnP) + (error - errorLast) *
-    // params.turnD; errorLast = error;
-
-    // servoPwm = (uint16_t)(PWMSERVOMID + pwmDiff); // PWM转换
+  void poseCtrl(const ControlCenter &controlCenter, Scene scene, float P,
+                float D, float pd_P, float pd_D) {
+    // TODO(me): 场景判断
     // 纯跟随
     POINT car(ROWSIMAGE - 1, COLSIMAGE / 2 - 5);
     // 计算远锚点偏差值 delta
     float dy = controlCenter.centerEdge[controlCenter.aim_idx].x - car.x;
     float dx = car.y - controlCenter.centerEdge[controlCenter.aim_idx].y;
     float dn = sqrt(dx * dx + dy * dy);
-    pure_angle = atanf(pixel_per_meter * 2 * 0.3 * dx / dn / dn) / PI * 180;
+    pure_angle =
+        atanf(pixel_per_meter * 2 * params.aim_distance * dx / dn / dn) / PI *
+        180;
     // pure_angle -= 1;
     // if(pure_angle>0) pure_angle += 2;//pure_angle *= left_scale;
     // else pure_angle -= 1;//pure_angle *= right_scale;
     // cout << pure_angle << endl;
+    // 偏角度闭环
     int pwmDiff = 0;
-    pwmDiff = (pure_angle * params.turnP) +
-              (pure_angle - pure_angleLast) * params.turnD; //舵机PWM偏移量
+    pwmDiff = (pure_angle * P) + (pure_angle - pure_angleLast) * D;
     pure_angleLast = pure_angle;
 
-    float pd_error =
-        COLSIMAGE / 2 - controlCenter.controlCenter; // 图像控制中心转换偏差
-    static int pd_errorLast = 0;                     // 记录前一次的偏差
+    // 二阶误差闭环
+    float pd_error = COLSIMAGE / 2.0 - controlCenter.controlCenter;
+    static int pd_errorLast = 0;
     int pd_pwmDiff = 0;
-    pd_pwmDiff = (pd_error * params.runP1) +
-                 (pd_error - pd_errorLast) * params.turnD; //舵机PWM偏移量
+    pd_pwmDiff = (pd_error * pd_P) + (pd_error - pd_errorLast) * pd_D;
     pd_errorLast = pd_error;
 
     servoPwm =
@@ -146,7 +159,6 @@ public:
    * @param control
    */
   void speedCtrl(bool enable, bool slowDown, ControlCenter control) {
-    // 控制率
     uint8_t controlLow = 0;   // 速度控制下限
     uint8_t controlMid = 5;   // 控制率
     uint8_t controlHigh = 10; // 速度控制上限

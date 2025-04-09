@@ -1,5 +1,4 @@
 ﻿#pragma once
-#include "common.hpp"
 
 #define UART_FRAME_HEAD 0x34
 #define UART_FRAME_TAIL 0x43

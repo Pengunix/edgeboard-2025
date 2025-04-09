@@ -1,6 +1,6 @@
 #include "capture.hpp"
 #include "detection.hpp"
-#include "main.hpp"
+#include "common.hpp"
 #include "preprocess.hpp"
 
 int main() {
@@ -8,7 +8,7 @@ int main() {
   auto cap = std::make_shared<Capture>(0);
   auto detection = std::make_shared<Detection>();
   detection->score = 0.5;
-  std::future<std::vector<PredictResult>> future;
+  std::future<void> future;
   std::vector<PredictResult> AIresults;
   cap->open();
 
@@ -26,18 +26,18 @@ int main() {
       AIFlag = true;
       future = std::async(
           std::launch::async,
-          [&detection](const cv::Mat &image) -> std::vector<PredictResult> {
-            return detection->inference(image);
+          [&detection](const cv::Mat &image) {
+            detection->inference(image);
           },
           img);
     } else {
       AIFlag = false;
     }
-    detection->drawBox(img, detection->results);
+    detection->drawBox(img);
     auto end = std::chrono::steady_clock::now();
     auto duration =
         std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-    std::cout << duration.count() << std::endl;
+    // std::cout << duration.count() << std::endl;
     cv::imshow("aa", img);
     cv::waitKey(20);
   }

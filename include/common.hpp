@@ -56,7 +56,7 @@
 #define using_kernel_num 7
 #define using_resample_dist 0.05
 #define PI 3.141593
-#define pixel_per_meter 176
+#define pixel_per_meter 133
 
 /**
  * @brief 场景类型（路况）
@@ -310,14 +310,14 @@ convertCvPointsToPoints(const std::vector<cv::Point2f> &cvPoints) {
 } // Point2f to POINT
 
 cv::Mat auto_init_ipm_mat() {
-  int offsety = 0;
+  int offsety = 20;
   std::vector<cv::Point2f> srcPoints = {
-      cv::Point2f(100, 80), cv::Point2f(217, 83), cv::Point2f(61, 148),
-      cv::Point2f(257, 149)};
+      cv::Point2f(93, 76), cv::Point2f(214, 75), cv::Point2f(52, 153),
+      cv::Point2f(259, 146)};
   std::vector<cv::Point2f> dstPoints = {
-      cv::Point2f(120, 100 + offsety), cv::Point2f(200, 100 + offsety),
-      cv::Point2f(120, 180 + offsety), cv::Point2f(200, 180 + offsety)};
-  cv::Mat M = getPerspectiveTransform(
+      cv::Point2f(130, 120 + offsety), cv::Point2f(190, 120 + offsety),
+      cv::Point2f(130, 180 + offsety), cv::Point2f(190, 180 + offsety)};
+  cv::Mat M = cv::getPerspectiveTransform(
       srcPoints, dstPoints);
 
   return M;

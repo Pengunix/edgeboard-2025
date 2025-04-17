@@ -6,32 +6,32 @@
     "speedLayby": 2.4,
     "speedObstacle": 2.3,
     "speedParking": 2.1,
-    "speedRing": 2.4,
+    "speedRing": 1.4,
     "speedDown": 1.6,
 
-    "pd_P": 3.85,
-    "pd_D": 4,
+    "pd_P": 0.0695,
+    "pd_D": 7.0,
 
     "NormP": 8.02,
-    "NormD": 16,
+    "NormD": 22.4,
 
-    "alpha": 0.7,
+    "alpha": 0.5,
 
     "ringSum": 2,
-    "ringEnter0": 30,
-    "ringP0": 7.8,
+    "ringEnter0": 60,
+    "ringP0": 8,
     "ringD0": 0.0,
-    "ringEnter1": 35,  
+    "ringEnter1": 30,  
     "ringP1": 8.0,  
     "ringD1": 0.0,
-    "ringEnter2": 32,
+    "ringEnter2": 30,
     "ringP2": 2.4,
     "ringD2": 0.0,
     "ringEnter3": 0,
     "ringP3": 0.0,
     "ringD3": 0.0,
 
-    "aim_distance": 0.6,
+    "aim_distance": 0.65,
     "track_startline": 180,
 
     "pl": 0.2,
@@ -39,8 +39,8 @@
 
     "debug": false,
     "saveImg": false,
-    "rowCutUp": 40,
-    "rowCutBottom": 25,
+    "rowCutUp": 20,
+    "rowCutBottom": 40,
 
     "bridge": true,
     "catering": true,

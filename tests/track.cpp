@@ -20,19 +20,18 @@ int main() {
   Ring ring;
   Bridge bridge;
   Crossroad crossroad;
-  std::vector<int> roadwidth{
-      250, 249, 248, 247, 246, 246, 244, 244, 242, 242, 240, 240, 239, 238, 237,
-      236, 235, 234, 233, 232, 231, 230, 229, 229, 227, 227, 225, 225, 223, 223,
-      221, 221, 219, 219, 218, 217, 216, 215, 214, 213, 212, 211, 210, 210, 208,
-      208, 206, 206, 204, 204, 202, 202, 200, 200, 199, 198, 197, 196, 195, 193,
-      193, 191, 191, 190, 189, 188, 187, 186, 186, 184, 184, 182, 182, 180, 180,
-      178, 178, 177, 176, 175, 174, 173, 172, 172, 170, 170, 169, 168, 167, 166,
-      165, 164, 163, 161, 161, 160, 159, 158, 157, 156, 155, 155, 153, 153, 151,
-      151, 149, 149, 147, 147, 146, 145, 144, 143, 142, 142, 140, 140, 138, 138,
-      137, 136, 135, 134, 133, 132, 131, 130, 130, 129, 128, 127, 126, 125, 125,
-      123, 123, 121, 121, 119, 119, 118, 117, 116, 115, 114, 113, 113, 111, 111,
-      109, 109, 109, 107, 107, 106, 105, 104, 103, 102, 102, 100, 100, 98,  98,
-      97,  96,  95,  94,  93,  92,  91,  90,  90,  89,  88,  87,  86,  86,  84};
+  std::vector<int> roadwidth;
+  roadwidth.reserve(ROWSIMAGE);
+  std::ifstream inFile("./config/roadwidth.txt");
+  if (!inFile.is_open()) {
+    spdlog::critical("Failed to Read roadwidth file");
+    return -1;
+  }
+  int value;
+  while (inFile >> value) {
+    roadwidth.emplace_back(value);
+  }
+  inFile.close();
 
   Scene scene = Scene::NormalScene;
   Scene sceneLast = Scene::NormalScene;
@@ -50,7 +49,6 @@ int main() {
   uart->startReceive();
   // uart->buzzer = BUZZER_START;
   // uart->carControl(0, PWMSERVOMID);
-
   while (true) {
     auto FrameStartTime =
         std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -63,22 +61,37 @@ int main() {
     track.rowCutBottom = motion.params.rowCutBottom;
     track.trackRecognition(imageBin);
 
+#if 0
+    std::ofstream outFile("./config/roadwidth.txt", std::ios::app);
+    if (!outFile.is_open()) {
+      spdlog::critical("RoadWidth File Write Failed!");
+      return -1;
+    }
+    for (int row = 0; row < track.pointsEdgeLeft.size(); ++row) {
+      int x = track.pointsEdgeRight[row].y - track.pointsEdgeLeft[row].y;
+      outFile << x << "\n";
+    }
+    outFile.close();
+#endif
+
+    // 环岛
+    if ((scene == Scene::NormalScene || scene == Scene::RingScene) &&
+        motion.params.ring) {
+      uint8_t ringEnter[10] = {
+          motion.params.ringEnter0, motion.params.ringEnter1,
+          motion.params.ringEnter2, motion.params.ringEnter3};
+      if (ring.ringRecognition(track, motion.params.ringSum, ringEnter,
+                               roadwidth)) {
+        scene = Scene::RingScene;
+      } else {
+        scene = Scene::NormalScene;
+      }
+    }
     // 十字识别
     if ((scene == Scene::NormalScene || scene == Scene::CrossScene) &&
         motion.params.cross) {
       if (crossroad.crossRecognition(track)) {
         scene = Scene::CrossScene;
-      } else {
-        scene = Scene::NormalScene;
-      }
-    }
-
-    // 环岛
-    if ((scene == Scene::NormalScene || scene == Scene::RingScene) &&
-        motion.params.ring) {
-      uint8_t ringEnter[10] = {20, 20, 32, 0};
-      if (ring.ringRecognition(track, 2, ringEnter, roadwidth)) {
-        scene = Scene::RingScene;
       } else {
         scene = Scene::NormalScene;
       }
@@ -100,17 +113,19 @@ int main() {
       motion.speedCtrl(true, false, ctrlCent);
     }
 
-    ctrlCent.drawImage(track, imageBGR);
+    ctrlCent.drawImage(track, scene, imageBGR);
     float P, D;
     if (scene == Scene::NormalScene || scene == Scene::CrossScene ||
         scene == Scene::ParkingScene || scene == Scene::BridgeScene) {
 
       P = motion.params.pl * motion.pure_angle * motion.pure_angle / 50 +
           motion.params.ph;
-      // if(P>motion.params.pl*45*45/50 + motion.params.ph)
-      // P=motion.params.pl*45*45/50 + motion.params.ph;
-      if (P > 8.3)
-        P = 8.3;
+      // if (P > motion.params.pl * 45 * 45 / 50 + motion.params.ph) {
+      //   P = motion.params.pl * 45 * 45 / 50 + motion.params.ph;
+      // }
+      if (P > 8.1) {
+        P = 8.1;
+      }
       D = motion.params.NormD;
     } else if (scene == Scene::RingScene) {
       if (ring.ringStep == RingStep::Waiting ||
@@ -131,7 +146,7 @@ int main() {
         } // R50
       }
     }
-    spdlog::info("P {}", P);
+    // spdlog::info("scene {} | P {}", getScene(scene), P);
     motion.poseCtrl(ctrlCent, scene, P, D, motion.params.pd_P,
                     motion.params.pd_D);
 
@@ -161,9 +176,9 @@ int main() {
       return -1;
     }
 
-    // :imshow("Test", imageBGR);
-    // savePicture(imageBGR);
-    // cv::waitKey(1);
+    cv::imshow("Test", imageBGR);
+    savePicture(imageBGR);
+    cv::waitKey(1);
   }
 
   return 0;

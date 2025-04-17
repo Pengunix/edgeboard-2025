@@ -2,7 +2,7 @@
 #include "common.hpp"
 #include "recognition/tracking.hpp"
 
-#define BOUNDARY_SHOW 0
+#define BOUNDARY_SHOW 1
 
 class ControlCenter {
 public:
@@ -29,7 +29,8 @@ public:
    */
 
   void fitting(Tracking &track, Scene scene, float aim_distance,
-               uint16_t track_startline, int ringstep, bool R100, int ringtype) {
+               uint16_t track_startline, int ringstep, bool R100,
+               int ringtype) {
     sigmaCenter = 0;
     controlCenter = COLSIMAGE / 2;
     centerEdge.clear();
@@ -75,12 +76,12 @@ public:
       transformedPoints_Right = convertCvPointsToPoints(transformedPoints);
 
       transformedPoints_Left =
-          blur_points(transformedPoints_Left, using_kernel_num); //三角滤波
+          blur_points(transformedPoints_Left, using_kernel_num); // 三角滤波
       transformedPoints_Right =
           blur_points(transformedPoints_Right, using_kernel_num);
       transformedPoints_Left =
           resample_points(transformedPoints_Left,
-                          using_resample_dist * pixel_per_meter); //下采样
+                          using_resample_dist * pixel_per_meter); // 下采样
       transformedPoints_Right = resample_points(
           transformedPoints_Right, using_resample_dist * pixel_per_meter);
       // 逆透视图像绘制
@@ -99,14 +100,12 @@ public:
       }
 #endif
 
-      //中线
+      // 中线
       left_num = 0, right_num = 0;
       int bound = (track.pointsEdgeLeft.size() > 100
                        ? (track.pointsEdgeLeft.size() - 20)
                        : track.pointsEdgeLeft.size());
-      if (track.pointsEdgeLeft.size() < 20)
-        ;
-      else {
+      if (track.pointsEdgeLeft.size() > 21) {
         for (int i = 0; i < bound; i++) {
           if (track.pointsEdgeLeft[i].y <= 3)
             left_num = 0;
@@ -143,7 +142,7 @@ public:
           style = "RIGHT";
         }
       }
-      speed_centeredge = centerEdge; //用作速度策略的中线
+      speed_centeredge = centerEdge; // 用作速度策略的中线
 
       // // 找最近点(起始点中线归一化)
       // POINT car(ROWSIMAGE - 1, COLSIMAGE / 2);
@@ -178,23 +177,23 @@ public:
       //     centerEdge1.end()), using_resample_dist * pixel_per_meter);
 
       std::vector<cv::Point2f> pointsToTransform_center =
-          convertPointsToCvPoints(centerEdge); //中线转为cvpoint
+          convertPointsToCvPoints(centerEdge); // 中线转为cvpoint
       perspectiveTransform(pointsToTransform_center, transformedPoints,
-                           inverse); //透视
+                           inverse); // 透视
       centerEdge_show =
-          convertCvPointsToPoints(transformedPoints); //透视后中线转为POINT
+          convertCvPointsToPoints(transformedPoints); // 透视后中线转为POINT
 
       pointsToTransform_center =
-          convertPointsToCvPoints(centerEdge1); //中线转为cvpoint
+          convertPointsToCvPoints(centerEdge1); // 中线转为cvpoint
       perspectiveTransform(pointsToTransform_center, transformedPoints,
-                           inverse); //透视
+                           inverse); // 透视
       centerEdge_show1 =
-          convertCvPointsToPoints(transformedPoints); //透视后中线转为POINT
+          convertCvPointsToPoints(transformedPoints); // 透视后中线转为POINT
 
       aim_idx = clip(round(aim_distance / using_resample_dist), 0,
-                     centerEdge.size() - 1); //跟随点
+                     centerEdge.size() - 1); // 跟随点
       speed_aim_idx = clip(round(0.8 / using_resample_dist), 0,
-                           centerEdge.size() - 1); //跟随点
+                           centerEdge.size() - 1); // 跟随点
 
       // 加权控制中心计算
       int controlNum = 1;
@@ -310,7 +309,7 @@ public:
    *
    * @param centerImage 需要叠加显示的图像
    */
-  void drawImage(Tracking track, cv::Mat &centerImage) {
+  void drawImage(Tracking track, Scene scene, cv::Mat &centerImage) {
     for (int i = 0; i < track.pointsEdgeLeft.size(); i++) {
       if (track.pointsEdgeLeft[i].x >= 0 &&
           track.pointsEdgeLeft[i].x < ROWSIMAGE &&
@@ -368,6 +367,8 @@ public:
     // 详细控制参数显示
     int dis = 20;
     std::string str;
+    putText(centerImage, getScene(scene), cv::Point(COLSIMAGE - 150, dis),
+            cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(0, 0, 255), 1);
     putText(centerImage, style, cv::Point(COLSIMAGE - 60, dis),
             cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(0, 0, 255), 1); // 赛道类型
 

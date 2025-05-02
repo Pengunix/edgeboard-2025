@@ -33,8 +33,7 @@ public:
     }
 
     speed = params.speedLow;
-    spdlog::info("[motion] NormP: {} | NormD: {}", params.NormP,
-                 params.NormD);
+    spdlog::info("[motion] NormP: {} | NormD: {}", params.NormP, params.NormD);
     spdlog::info("[motion] pd_P: {} | pd_D: {}", params.pd_P, params.pd_D);
     spdlog::info("[motion] speedLow: {}  | speedHigh: {}", params.speedLow,
                  params.speedHigh);
@@ -101,9 +100,9 @@ public:
     std::string video = "../res/samples/demo.mp4";          // 视频路径
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(
         Params, speedLow, speedHigh, speedBridge, speedCatering, speedLayby,
-        speedObstacle, speedParking, speedRing, speedDown, pd_P, pd_D,
-        NormP, NormD, alpha, ringSum, ringEnter0, ringP0, ringD0, ringEnter1,
-        ringP1, ringD1, ringEnter2, ringP2, ringD2, ringEnter3, ringP3, ringD3,
+        speedObstacle, speedParking, speedRing, speedDown, pd_P, pd_D, NormP,
+        NormD, alpha, ringSum, ringEnter0, ringP0, ringD0, ringEnter1, ringP1,
+        ringD1, ringEnter2, ringP2, ringD2, ringEnter3, ringP3, ringD3,
         aim_distance, track_startline, pl, ph, debug, saveImg, rowCutUp,
         rowCutBottom, bridge, catering, layby, obstacle, parking, ring, cross,
         stop, score, model,
@@ -150,6 +149,13 @@ public:
 
     servoPwm =
         (uint16_t)(PWMSERVOMID + 0.5 * pwmDiff + 0.5 * pd_pwmDiff); // PWM转换
+    // 舵机限幅
+    if (servoPwm > PWMSERVOMAX) {
+      servoPwm = PWMSERVOMAX;
+    }
+    if (servoPwm < PWMSERVOMIN) {
+      servoPwm = PWMSERVOMIN;
+    }
   }
 
   /**

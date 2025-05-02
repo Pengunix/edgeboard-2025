@@ -1,5 +1,4 @@
 #pragma once
-#include "common.hpp"
 #include "recognition/tracking.hpp"
 enum RingStep {
   None = 0, // 未知类型
@@ -51,7 +50,6 @@ public:
   bool ringRecognition(Tracking &track, uint8_t ringSum, uint8_t *ringEnter,
                        const std::vector<int> &RoadWidth) {
     // std::cout << ringStep << std::endl;
-    // std::cout << track.stdevLeft << " " << track.stdevRight << std::endl;
     if (ringStep == RingStep::None) {
       // 左环
       if (track.stdevRight < 15 && track.stdevLeft > 20) {
@@ -115,7 +113,7 @@ public:
 
       // 右环
       if (track.stdevLeft < 15 && track.stdevRight > 20) {
-        std::cout << ringStep << std::endl;
+        // std::cout << ringStep << std::endl;
         uint8_t left_sum = 0;
         uint8_t right_cnt = 0;
         uint8_t right_state = 0;
@@ -291,6 +289,7 @@ public:
           if (search && track.pointsEdgeLeft[i].x < 85 &&
               track.pointsEdgeLeft[i].y < 3) {
             endpoint = track.pointsEdgeLeft[i];
+            std::cout << "endpoint" <<  endpoint.x << endpoint.y << std::endl;
             whitecnt++;
           }
         }

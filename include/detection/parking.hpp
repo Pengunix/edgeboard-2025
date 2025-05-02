@@ -21,7 +21,7 @@ public:
 
   bool process(Tracking &track, cv::Mat &image, std::vector<PredictResult> predict) {
     counterSession++;
-    if (step != ParkStep::none && counterSession > 80) // 超时退出
+    if (step != ParkStep::none && counterSession > 400) // 超时退出
     {
       counterRec = 0;
       counterSession = 0;
@@ -181,7 +181,7 @@ public:
         // 接近水平并且在右侧
         if (abs(angle) < 40 && angle < 0 && midX > COLSIMAGE / 2) {
           horizontalLines.push_back(line);
-          cv::line(imgRes, cv::Point(line[0], line[1]), cv::Point(line[2], line[3]),
+          cv::line(edges, cv::Point(line[0], line[1]), cv::Point(line[2], line[3]),
                    cv::Scalar(0, 0, 255), 2);
           int midY = (line[1] + line[3]) / 2;       // 计算直线中点y坐标
           if (midY > lineY && (midY - lineY) <= 10) // 限制线段增加值
@@ -192,8 +192,8 @@ public:
           }
         }
       }
-      // imshow("Detected Lines", imgRes);
-      // waitKey(0);
+      // cv::imshow("Detected Lines", edges);
+      // cv::waitKey(1);
 
       if (lineY > ROWSIMAGE * swerveTime) // 控制转弯时机
       {
@@ -218,15 +218,15 @@ public:
           int y = static_cast<int>(start.y +
                                    slope * (x - start.x)); // 根据斜率计算 y 值
           POINT pt;
-          pt.x = y; // 将 cv::cv::Point 的 x 赋值给 POINT 的 y
-          pt.y = x; // 将 cv::cv::Point 的 y 赋值给 POINT 的 x
+          pt.x = y; // 将 Point 的 x 赋值给 POINT 的 y
+          pt.y = x; // 将 Point 的 y 赋值给 POINT 的 x
           track.pointsEdgeLeft.push_back(pt); // 将 POINT 存入点集
         }
 
-        pathsEdgeLeft.push_back(track.pointsEdgeLeft); // 记录进厂轨迹
+        pathsEdgeLeft.push_back(track.pointsEdgeLeft); // 记录入库轨迹
         pathsEdgeRight.push_back(track.pointsEdgeRight);
       }
-      if (counterSession > truningTime && startTurning) // 开始停车状态
+      if (counterSession > turningTIme && startTurning) // 开始停车状态
       {
         spdlog::info("[parking] 开始停车");
         step = ParkStep::stop; // 开始停车
@@ -235,8 +235,10 @@ public:
     }
     case ParkStep::stop: // 停车
     {
-      if (counterSession > stopTime) // 倒车状态
+      if (counterSession > stopTime) {
         step = ParkStep::trackout;   // 开始倒车
+        spdlog::info("停车切倒车");
+      }
       break;
     }
     case ParkStep::trackout: // 出库
@@ -269,7 +271,7 @@ public:
         ptB = cv::Point(0, 0);
         pathsEdgeRight.clear();
         pathsEdgeLeft.clear();
-        spdlog::info("[parking] 退出停车场");
+        spdlog::info("[parking] 已退出停车场");
       }
       break;
     }
@@ -286,12 +288,12 @@ public:
     // 赛道边缘
     for (size_t i = 0; i < track.pointsEdgeLeft.size(); i++) {
       circle(image, cv::Point(track.pointsEdgeLeft[i].y, track.pointsEdgeLeft[i].x),
-             1, cv::Scalar(0, 255, 0), -1); // 绿色点
+             1, cv::Scalar(0, 0, 255), -1); // 红色点
     }
     for (size_t i = 0; i < track.pointsEdgeRight.size(); i++) {
       circle(image,
              cv::Point(track.pointsEdgeRight[i].y, track.pointsEdgeRight[i].x), 1,
-             cv::Scalar(0, 255, 255), -1); // 黄色点
+             cv::Scalar(255, 255, 0), -1); // 紫色点
     }
 
     if (step != ParkStep::none)
@@ -309,7 +311,7 @@ private:
   std::vector<std::vector<POINT>> pathsEdgeRight;
   cv::Point ptA = cv::Point(0, 0); // 记录线段的两个端点
   cv::Point ptB = cv::Point(0, 0);
-  int truningTime = 21; // 转弯时间 21帧
-  int stopTime = 40;    // 停车时间 40帧
+  int turningTIme = 41; // 转弯时间 21帧
+  int stopTime = 400;    // 停车时间 40帧
   float swerveTime = 0.2; // 转向时机 0.2 （转弯线出现在屏幕上方0.2处）
 };

@@ -25,7 +25,6 @@ def uart_send(speed, buzzer, servo):
     uart6.write(txFrame)
 
 try:
-    print("按q退出")
     while True:
         setting = termios.tcgetattr(sys.stdin)
         InPut = getKey(setting)

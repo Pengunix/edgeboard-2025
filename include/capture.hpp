@@ -37,6 +37,9 @@ public:
     }
     return frame;
   };
+  void set(int propId, double value) {
+    _capture->set(propId, value);
+  }
   void close() {
     _isOpend = false;
     _capture->release();

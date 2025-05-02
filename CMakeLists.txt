@@ -4,7 +4,8 @@ set(CMAKE_C_COMPILER "/usr/bin/gcc")
 
 project(icar)
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_FLAGS "-Og -g -mcpu=native -flto")
+# 调试关闭 -flto
+set(CMAKE_CXX_FLAGS "-Og -g -mcpu=native")
 set(CMAKE_INSTALL_PREFIX /root/nfs)
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -40,11 +41,30 @@ link_directories(${ONNX_LIBRARY_DIRS})
 #---------------------------------------------------------------------
 add_subdirectory(${PROJECT_SOURCE_DIR}/spdlog)
 
-set(TEST_NAME Track)
-add_executable(${TEST_NAME} ${PROJECT_SOURCE_DIR}/tests/track.cpp)
-target_precompile_headers(${TEST_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/include/json.hpp ${PROJECT_SOURCE_DIR}/include/controlcenter.hpp)
+# set(TEST_NAME Track)
+# add_executable(${TEST_NAME} ${PROJECT_SOURCE_DIR}/tests/track.cpp)
+# target_precompile_headers(${TEST_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/include/json.hpp ${PROJECT_SOURCE_DIR}/include/controlcenter.hpp)
+# target_link_libraries(
+#         ${TEST_NAME}
+#         ${PPNC_LIBRARIES}
+#         ${ONNX_LIBRARIES}
+#         ${OpenCV_LIBS}
+#         ${SERIAL_LIBRARIES}
+#         spdlog::spdlog
+#         pthread
+# )
+
+add_executable(${CMAKE_PROJECT_NAME} ${PROJECT_SOURCE_DIR}/src/main.cpp)
+target_precompile_headers(${CMAKE_PROJECT_NAME} PUBLIC
+        ${PROJECT_SOURCE_DIR}/include/json.hpp
+        ${PROJECT_SOURCE_DIR}/include/controlcenter.hpp
+        ${PROJECT_SOURCE_DIR}/include/detection.hpp
+        ${PROJECT_SOURCE_DIR}/include/capture.hpp
+        ${PROJECT_SOURCE_DIR}/include/motion.hpp
+        ${PROJECT_SOURCE_DIR}/include/preprocess.hpp
+)
 target_link_libraries(
-        ${TEST_NAME}
+        ${CMAKE_PROJECT_NAME}
         ${PPNC_LIBRARIES}
         ${ONNX_LIBRARIES}
         ${OpenCV_LIBS}
@@ -53,27 +73,17 @@ target_link_libraries(
         pthread
 )
 
-# add_executable(${CMAKE_PROJECT_NAME} ${PROJECT_SOURCE_DIR}/src/main.cpp)
-# target_link_libraries(
-#         ${CMAKE_PROJECT_NAME}
-#         ${PPNC_LIBRARIES}
-#         ${ONNX_LIBRARIES}
-#         ${OpenCV_LIBS}
-#         ${SERIAL_LIBRARIES}
-#         pthread
-# )
-
 #---------------------------------------------------------------------
 #       [ Install  : Binary ] ==> [ NFS/SAMBA ]
 #---------------------------------------------------------------------
-install(TARGETS ${TEST_NAME}
+install(TARGETS ${TEST_NAME} ${PROJECT_NAME}
         RUNTIME DESTINATION .
         LIBRARY DESTINATION lib
 )
 install(FILES
         # PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_WRITE GROUP_EXECUTE WORLD_READ WORLD_WRITE WORLD_EXECUTE
         # 此配置文件包含模型路径，自行选择是否使用其中的路径
-        ${PROJECT_SOURCE_DIR}/config/config.json
+        # ${PROJECT_SOURCE_DIR}/config/config.json
         # ppnc的推理库必须使用这两个配置文件，此文件设置了nms和deploy_paddle动态库路径
         # 设置不正确可能出现runtime error, type mismatch
         ${PROJECT_SOURCE_DIR}/config/config_ppncnms.json

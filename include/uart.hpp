@@ -1,4 +1,5 @@
 ﻿#pragma once
+#include <common.hpp>
 
 #define UART_FRAME_HEAD 0x34
 #define UART_FRAME_TAIL 0x43
@@ -107,7 +108,7 @@ public:
     uartRecv = true;
     threadRec = std::make_unique<std::thread>([this]() {
       while(this->uartRecv) {
-        receiveCheck();
+        this->receiveCheck();
       }
     });
   }
@@ -132,14 +133,15 @@ public:
     }
     LibSerial::DataBuffer buff;
     serialPort->Read(buff, UART_RX_SIZE, 0);
+
     if (*buff.begin() == UART_FRAME_HEAD && *(buff.end()-1) == UART_FRAME_TAIL) {
       uint8_t check = *(buff.end() - 2);
       for (const uint8_t &i : buff) {
         check ^= i;
       }
-      if (check == *(buff.end() - 1)) {
+      if (check == *(buff.end() - 2)) {
         memcpy(rxBuff.data, buff.data(), UART_RX_SIZE);
-        printf("%f", rxBuff.speed);
+        keypress = rxBuff.keys;
       }
       buff.clear();
     } else {

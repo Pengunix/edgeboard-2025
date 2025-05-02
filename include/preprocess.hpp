@@ -10,7 +10,7 @@ public:
    * @brief 图像矫正参数初始化
    *
    */
-  Preprocess(const std::string &path) {
+  Preprocess(const std::string &path = "./config/calibration.xml") {
     // 读取xml中的相机标定参数
     cameraMatrix =
         cv::Mat(3, 3, CV_32FC1, cv::Scalar::all(0)); // 摄像机内参矩阵

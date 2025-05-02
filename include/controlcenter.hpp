@@ -1,8 +1,7 @@
 #pragma once
-#include "common.hpp"
 #include "recognition/tracking.hpp"
 
-#define BOUNDARY_SHOW 1
+#define BOUNDARY_SHOW 0
 
 class ControlCenter {
 public:
@@ -29,8 +28,8 @@ public:
    */
 
   void fitting(Tracking &track, Scene scene, float aim_distance,
-               uint16_t track_startline, int ringstep, bool R100,
-               int ringtype) {
+               uint16_t track_startline, int ringstep, bool R100, int ringtype,
+               bool burgerLeft) {
     sigmaCenter = 0;
     controlCenter = COLSIMAGE / 2;
     centerEdge.clear();
@@ -41,7 +40,7 @@ public:
 
     if (scene == Scene::NormalScene || scene == Scene::CrossScene ||
         scene == Scene::ParkingScene || scene == Scene::RingScene ||
-        scene == Scene::LaybyScene || scene == Scene::BridgeScene) {
+        scene == Scene::LaybyScene || scene == Scene::BridgeScene || scene ==Scene::CateringScene) {
 #if BOUNDARY_SHOW
       // 逆透视图像
       cv::Mat only_boundary =
@@ -131,6 +130,20 @@ public:
                                        0.225 * pixel_per_meter);
           style = "RIGHT";
         }
+      } else if (scene == Scene::CateringScene) {
+        if (burgerLeft) {
+          spdlog::info("汉堡在左侧，循右线");
+          centerEdge = track_rightline(transformedPoints_Right, 5,
+                                       0.225 * pixel_per_meter);
+          style = "RIGHT";
+
+        } else {
+          spdlog::info("汉堡在右侧，循左线");
+          centerEdge = track_leftline(transformedPoints_Left, 5,
+                                      0.225 * pixel_per_meter);
+          style = "LEFT";
+        }
+
       } else {
         if (left_num >= right_num) {
           centerEdge = track_leftline(transformedPoints_Left, 5,
@@ -334,28 +347,32 @@ public:
 
     // 绘制中心点集
     for (int i = 0; i < centerEdge.size(); i++) {
-      if (centerEdge_show[i].x >= 0 && centerEdge_show[i].x < ROWSIMAGE &&
-          centerEdge_show[i].y >= 0 && centerEdge_show[i].y < COLSIMAGE) {
-        if (i == aim_idx) {
-          circle(centerImage,
-                 cv::Point(centerEdge_show[i].y, centerEdge_show[i].x), 3,
-                 cv::Scalar(0, 0, 0), -1);
-        } else {
-          circle(centerImage,
-                 cv::Point(centerEdge_show[i].y, centerEdge_show[i].x), 1,
-                 cv::Scalar(255, 255, 255), -1);
+      if (!centerEdge_show.empty()) {
+        if (centerEdge_show[i].x >= 0 && centerEdge_show[i].x < ROWSIMAGE &&
+            centerEdge_show[i].y >= 0 && centerEdge_show[i].y < COLSIMAGE) {
+          if (i == aim_idx) {
+            circle(centerImage,
+                   cv::Point(centerEdge_show[i].y, centerEdge_show[i].x), 3,
+                   cv::Scalar(0, 0, 0), -1);
+          } else {
+            circle(centerImage,
+                   cv::Point(centerEdge_show[i].y, centerEdge_show[i].x), 1,
+                   cv::Scalar(255, 255, 255), -1);
+          }
         }
       }
-      if (centerEdge_show1[i].x >= 0 && centerEdge_show1[i].x < ROWSIMAGE &&
-          centerEdge_show1[i].y >= 0 && centerEdge_show1[i].y < COLSIMAGE) {
-        if (i == aim_idx) {
-          circle(centerImage,
-                 cv::Point(centerEdge_show1[i].y, centerEdge_show1[i].x), 3,
-                 cv::Scalar(128, 0, 255), -1);
-        } else {
-          circle(centerImage,
-                 cv::Point(centerEdge_show1[i].y, centerEdge_show1[i].x), 1,
-                 cv::Scalar(255, 128, 255), -1);
+      if (!centerEdge_show1.empty()) {
+        if (centerEdge_show1[i].x >= 0 && centerEdge_show1[i].x < ROWSIMAGE &&
+            centerEdge_show1[i].y >= 0 && centerEdge_show1[i].y < COLSIMAGE) {
+          if (i == aim_idx) {
+            circle(centerImage,
+                   cv::Point(centerEdge_show1[i].y, centerEdge_show1[i].x), 3,
+                   cv::Scalar(128, 0, 255), -1);
+          } else {
+            circle(centerImage,
+                   cv::Point(centerEdge_show1[i].y, centerEdge_show1[i].x), 1,
+                   cv::Scalar(255, 128, 255), -1);
+          }
         }
       }
     }

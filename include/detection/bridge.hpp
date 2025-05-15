@@ -72,7 +72,7 @@ public:
 
     if (bridgeEnable)
       cv::putText(image, "[1] BRIDGE - ENABLE",
-                  cv::Point(COLSIMAGE / 2 - 30, 10), cv::FONT_HERSHEY_TRIPLEX,
+                  cv::Point(10, 10), cv::FONT_HERSHEY_TRIPLEX,
                   0.3, cv::Scalar(0, 255, 0), 1, CV_AA);
   }
 

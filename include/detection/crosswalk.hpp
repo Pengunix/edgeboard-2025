@@ -117,7 +117,7 @@ public:
    */
   void drawImage(cv::Mat &img) {
     if (step == Step::enable)
-      putText(img, "[1] PARK - ENABLE", cv::Point(COLSIMAGE / 2 - 30, 10),
+      putText(img, "[1] PARK - ENABLE", cv::Point(10, 10),
               cv::FONT_HERSHEY_TRIPLEX, 0.3, cv::Scalar(0, 255, 0), 1, CV_AA);
   }
 };

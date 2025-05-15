@@ -5,6 +5,8 @@
 
 class Catering {
 public:
+  Catering(int travelTime = 10, int turningTime = 50, int stopTime = 100)
+      : travelTime(travelTime), turningTime(turningTime), stopTime(stopTime) {}
   bool stopEnable = false; // 停车使能标志
   bool noRing = false;     // 用来区分环岛路段
   bool burgerLeft = true;  // 汉堡在左侧
@@ -37,7 +39,7 @@ public:
       return true;
     } else {
       for (size_t i = 0; i < predict.size(); i++) {
-        if (predict[i].type == LABEL_BURGER && predict[i].score > 0.5 &&
+        if (predict[i].type == LABEL_BURGER && predict[i].score > 0.7 &&
             (predict[i].y + predict[i].height) > ROWSIMAGE * 0.3) {
           counterRec++;
           noRing = true;
@@ -56,6 +58,7 @@ public:
           counterRec = 0;
           counterSession = 0;
           cateringEnable = true; // 检测到汉堡标志
+          // TODO(me) : 若汉堡误判率过大，增加边线跳变约束
           return true;
         } else if (counterSession >= 8) {
           counterRec = 0;
@@ -85,7 +88,7 @@ public:
     }
 
     if (cateringEnable)
-      putText(image, "[1] Burger - ENABLE", cv::Point(COLSIMAGE / 2 - 30, 10),
+      putText(image, "[1] Burger - ENABLE", cv::Point(10, 10),
               cv::FONT_HERSHEY_TRIPLEX, 0.3, cv::Scalar(0, 255, 0), 1, CV_AA);
   }
 
@@ -95,7 +98,7 @@ private:
   bool cateringEnable = false; // 岔路区域使能标志
   bool turning = true;         // 转向标志
   int burgerY = 0;             // 汉堡高度
-  int turningTime = 60;        // 转弯时间 25帧
-  int travelTime = 0; // 行驶时间 10帧 在斜线路段的行驶时间
+  int turningTime = 50;        // 转弯时间 25帧
+  int travelTime = 10; // 行驶时间 10帧 在斜线路段的行驶时间
   int stopTime = 100;   // 停车时间 25帧
 };

@@ -26,7 +26,8 @@ public:
 
   RingType ringType = RingType::RingLeft; // 环岛类型
   uint8_t ringNum = 0;
-  uint16_t counterShield = 0; // 环岛检测屏蔽计数器：屏蔽车库误检测
+  // uint16_t counterShield = 0; // 环岛检测屏蔽计数器：屏蔽车库误检测
+  // 一定是环岛
   bool R100 = false;
 
   /**
@@ -38,8 +39,8 @@ public:
     RingStep ringStep = RingStep::None;     // 环岛处理阶段
     int rowRepairLine = 0;                  // 用于环补线的点（行号）
     int colRepairLine = 0;                  // 用于环补线的点（列号）
-    counterSpurroad = 0;                    // 岔路计数器
-    counterShield = 0;
+    // counterSpurroad = 0;                    // 岔路计数器
+    // counterShield = 0;
   }
   /**
    * @brief 环岛识别与行径规划
@@ -49,27 +50,30 @@ public:
    */
   bool ringRecognition(Tracking &track, uint8_t ringSum, uint8_t *ringEnter,
                        const std::vector<int> &RoadWidth) {
-    // std::cout << ringStep << std::endl;
     if (ringStep == RingStep::None) {
       // 左环
       if (track.stdevRight < 15 && track.stdevLeft > 20) {
-        uint8_t right_sum = 0;  //右边线数目
-        uint8_t left_cnt = 0;   //判断增减趋势
-        uint8_t left_state = 0; // 0:增, 1:减
-        uint8_t left_edge = 0;  //左丢线数目
+        uint8_t right_sum = 0;  // 右边线数目
+        uint8_t left_cnt = 0;   // 判断增减趋势
+        uint8_t left_state = 0; // 0:增, 1 2:减
+        uint8_t left_edge = 0;  // 左丢线数目
+        // 0左丢线计数 1内环凸起计数 2内环左凹计数
         int cnt[3] = {0, 0, 0};
         for (int i = 2; i < track.widthBlock.size(); i += 2) {
+          // 若当前点在上个点的左边或贴近边缘视作丢线
           if (track.pointsEdgeRight[i].y <= track.pointsEdgeRight[i - 2].y &&
               track.pointsEdgeRight[i - 2].y < COLSIMAGE - 3) {
             right_sum++;
-          } else
+          } else {
             right_sum = 0;
+          }
 
           if (left_state == 0) {
-            if (track.pointsEdgeLeft[i].y <= 3) //丢线
+            if (track.pointsEdgeLeft[i].y <= 3) // 丢线
             {
               cnt[0]++; // 25
             }
+            // 左边点存在向右凸起
             if (track.pointsEdgeLeft[i - 2].y <= 3 &&
                 track.pointsEdgeLeft[i].y <= 20 &&
                 track.pointsEdgeLeft[i].y > 3) {
@@ -77,16 +81,17 @@ public:
             }
           } else if (left_state == 1) {
             if (track.pointsEdgeLeft[i].y >
-                track.pointsEdgeLeft[i - 2].y + 1) //左边线向中间增
+                track.pointsEdgeLeft[i - 2].y + 1) // 左边线向中间增
             {
               cnt[1]++; // 5
             }
+            // 内环边线向左偏
             if (track.pointsEdgeLeft[i].y < track.pointsEdgeLeft[i - 2].y - 1) {
               left_state++;
             }
           } else if (left_state == 2) {
             if (track.pointsEdgeLeft[i].y <
-                track.pointsEdgeLeft[i - 2].y - 1) //左边线向中间增
+                track.pointsEdgeLeft[i - 2].y - 1) // 左边线向左减
             {
               cnt[2]++;
             }
@@ -130,7 +135,7 @@ public:
             left_sum = 0;
 
           if (right_state == 0) {
-            if (track.pointsEdgeRight[i].y >= COLSIMAGE - 3) //丢线
+            if (track.pointsEdgeRight[i].y >= COLSIMAGE - 3) // 丢线
             {
               cnt[0]++;
             }
@@ -141,7 +146,7 @@ public:
             }
           } else if (right_state == 1) {
             if (track.pointsEdgeRight[i].y <
-                track.pointsEdgeRight[i - 2].y - 1) //右边线向中间增
+                track.pointsEdgeRight[i - 2].y - 1) // 右边线向中间增
             {
               cnt[1]++;
             }
@@ -151,7 +156,7 @@ public:
             }
           } else if (right_state == 2) {
             if (track.pointsEdgeRight[i].y >
-                track.pointsEdgeRight[i - 2].y + 1) //右边线向右边减
+                track.pointsEdgeRight[i - 2].y + 1) // 右边线向右边减
             {
               cnt[2]++;
             }
@@ -179,6 +184,7 @@ public:
     }
 
     else if (ringStep == RingStep::Verifing) {
+      spdlog::info("环岛 Verifying");
       if (ringType == RingType::RingLeft) {
         if (track.stdevRight > 15) {
           ringStep = RingStep::None;
@@ -190,7 +196,7 @@ public:
         for (int i = 2; i < track.pointsEdgeLeft.size(); i++) {
           if (state == 0) {
             if (track.pointsEdgeLeft[i].y >
-                track.pointsEdgeLeft[i - 2].y) //左边线向中间增
+                track.pointsEdgeLeft[i - 2].y) // 左边线向中间增
             {
               cnt[0]++;
             }
@@ -199,14 +205,15 @@ public:
           }
           if (state == 1) {
             if (track.pointsEdgeLeft[i].y <
-                track.pointsEdgeLeft[i - 2].y) //减 //3
+                track.pointsEdgeLeft[i - 2].y) // 左边线向中间减
             {
+              // 3
               cnt[1]++;
             }
             if (track.pointsEdgeLeft[i].y <= 3)
               state++;
           }
-          if (state == 2) //丢线
+          if (state == 2) // 丢线
           {
             if (track.pointsEdgeLeft[i].y <= 3)
               cnt[2]++;
@@ -235,7 +242,7 @@ public:
         for (int i = 2; i < track.pointsEdgeRight.size(); i++) {
           if (state == 0) {
             if (track.pointsEdgeRight[i].y <
-                track.pointsEdgeRight[i - 2].y) //右边线向中间减
+                track.pointsEdgeRight[i - 2].y) // 右边线向中间减
             {
               cnt[0]++;
             }
@@ -270,6 +277,7 @@ public:
     }
 
     else if (ringStep == RingStep::Waiting) {
+      spdlog::info("环岛 Waiting");
       if (ringType == RingType::RingLeft) {
         if (track.stdevRight > 15) {
           ringStep = RingStep::None;
@@ -288,11 +296,12 @@ public:
             search = false;
           if (search && track.pointsEdgeLeft[i].x < 85 &&
               track.pointsEdgeLeft[i].y < 3) {
+            // TODO(me): 这里的点是从上往下找的，可能会有问题，若环岛前方右弯道会无法进环岛
             endpoint = track.pointsEdgeLeft[i];
-            std::cout << "endpoint" <<  endpoint.x << endpoint.y << std::endl;
             whitecnt++;
           }
         }
+        spdlog::info("endpoint x {}, y {}", endpoint.x, endpoint.y);
 
         if (!search && endpoint.x > ringEnter[ringNum]) {
           ringStep = RingStep::Entering;
@@ -342,6 +351,7 @@ public:
         }
       }
     } else if (ringStep == RingStep::Entering) {
+      spdlog::info("环岛 Entering");
       if (ringType == RingType::RingLeft) {
         //     EnteringCounter ++;  //入环计数器
         //   printf("%d %d\n", track.pointsEdgeRight.size(),
@@ -353,7 +363,7 @@ public:
           ringStep = RingStep::Inside;
         }
 
-        //补线
+        // 补线
         if (ringStep == RingStep::Entering) {
           int whitecnt = 0;
           POINT endpoint = POINT(0, 0);
@@ -490,14 +500,14 @@ public:
         //    printf("%d %d\n",left_state,  left_cnt);
       }
     } else if (ringStep == RingStep::Exiting) {
-      //   printf("Exiting\n");
+      spdlog::info("退出环岛");
       if (ringType == RingType::RingLeft) {
         int whitecnt = 0;
         int stage = 0;
         bool left_leave = false;
         for (int i = 2; i < track.pointsEdgeRight.size(); i += 2) {
           if (track.pointsEdgeRight[i].y > COLSIMAGE - 4)
-            whitecnt++; //右丢线
+            whitecnt++; // 右丢线
           if (stage == 0 &&
               track.pointsEdgeRight[i].y < track.pointsEdgeRight[i - 2].y)
             stage++; //
@@ -600,63 +610,15 @@ public:
     if (ringStep == RingStep::None) {
       return false;
     } else {
-      //      printf("-----------环岛 %d %d %d\n", ringStep,
-      //      track.pointsEdgeRight.size(), track.pointsEdgeRight[10].y);
+      // spdlog::info("环岛 边线点集长度 left {}, right {}",
+                  //  track.pointsEdgeLeft.size(), track.pointsEdgeRight.size());
       return true;
     }
   }
 
-  /**
-   * @brief 绘制环岛识别图像
-   *
-   * @param ringImage 需要叠加显示的图像
-   */
-  void drawImage(Tracking track, cv::Mat &ringImage) {
-    // for (int i = 0; i < track.pointsEdgeLeft.size(); i++)
-    // {
-    //     circle(ringImage, Point(track.pointsEdgeLeft[i].y,
-    //     track.pointsEdgeLeft[i].x), 2,
-    //            Scalar(0, 255, 0), -1); // 绿色点
-    // }
-    // for (int i = 0; i < track.pointsEdgeRight.size(); i++)
-    // {
-    //     circle(ringImage, Point(track.pointsEdgeRight[i].y,
-    //     track.pointsEdgeRight[i].x), 2,
-    //            Scalar(0, 255, 255), -1); // 黄色点
-    // }
-
-    // for (int i = 0; i < track.spurroad.size(); i++)
-    // {
-    //     circle(ringImage, Point(track.spurroad[i].y, track.spurroad[i].x), 5,
-    //            Scalar(0, 0, 255), -1); // 红色点
-    // }
-
-    // putText(ringImage, to_string(_ringStep) + " " + to_string(_ringEnable) +
-    // " " + to_string(_tmp_ttttt),
-    //         Point(COLSIMAGE - 80, ROWSIMAGE - 20), cv::FONT_HERSHEY_TRIPLEX,
-    //         0.3, cv::Scalar(0, 0, 255), 1, CV_AA);
-
-    // putText(ringImage, to_string(_index), Point(80, ROWSIMAGE - 20),
-    // cv::FONT_HERSHEY_TRIPLEX, 0.3, cv::Scalar(0, 0, 255), 1, CV_AA);
-
-    // putText(ringImage, to_string(track.validRowsRight) + " | " +
-    // to_string(track.stdevRight),
-    //         Point(COLSIMAGE - 100, ROWSIMAGE - 50),
-    //         FONT_HERSHEY_TRIPLEX, 0.3, Scalar(0, 0, 255), 1, CV_AA);
-    // putText(ringImage, to_string(track.validRowsLeft) + " | " +
-    // to_string(track.stdevLeft),
-    //         Point(30, ROWSIMAGE - 50), FONT_HERSHEY_TRIPLEX, 0.3, Scalar(0,
-    //         0, 255), 1, CV_AA);
-
-    // putText(ringImage, "[7] RING - ENABLE", Point(COLSIMAGE / 2 - 30, 10),
-    // cv::FONT_HERSHEY_TRIPLEX, 0.3, cv::Scalar(0, 255, 0), 1, CV_AA);
-    // circle(ringImage, Point(_ringPoint.y, _ringPoint.x), 4, Scalar(255, 0,
-    // 0), -1); // 红色点
-  }
-
 private:
   float distance = 0;
-  uint16_t counterSpurroad = 0; // 岔路计数器
+  // uint16_t counterSpurroad = 0; // 岔路计数器
   // 临时测试用参数
   int _ringStep;
   int _ringEnable;

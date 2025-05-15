@@ -170,7 +170,7 @@ public:
    */
   void drawImage(cv::Mat &img) {
     if (enable) {
-      putText(img, "[2] Obstacle - ENABLE", cv::Point(COLSIMAGE / 2 - 30, 10),
+      putText(img, "[2] Obstacle - ENABLE", cv::Point(10, 10),
               cv::FONT_HERSHEY_TRIPLEX, 0.3, cv::Scalar(0, 255, 0), 1, CV_AA);
       cv::Rect rect(resultObs.x, resultObs.y, resultObs.width,
                     resultObs.height);
@@ -188,7 +188,7 @@ private:
    * @param track
    * @param left
    */
-  void curtailTracking(Tracking &track, bool left) {
+  void curtailTracking(Tracking &track, bool left, int offset=50) {
     if (left) // 向左侧缩进
     {
       if (track.pointsEdgeRight.size() > track.pointsEdgeLeft.size())
@@ -196,7 +196,7 @@ private:
 
       for (size_t i = 0; i < track.pointsEdgeRight.size(); i++) {
         track.pointsEdgeRight[i].y =
-            (track.pointsEdgeRight[i].y + track.pointsEdgeLeft[i].y) / 2;
+            ((track.pointsEdgeRight[i].y + track.pointsEdgeLeft[i].y) / 2) + offset;
       }
     } else // 向右侧缩进
     {
@@ -205,7 +205,7 @@ private:
 
       for (size_t i = 0; i < track.pointsEdgeLeft.size(); i++) {
         track.pointsEdgeLeft[i].y =
-            (track.pointsEdgeRight[i].y + track.pointsEdgeLeft[i].y) / 2;
+            ((track.pointsEdgeRight[i].y + track.pointsEdgeLeft[i].y) / 2) - offset;
       }
     }
   }

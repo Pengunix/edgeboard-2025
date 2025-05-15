@@ -24,32 +24,35 @@ def uart_send(speed, buzzer, servo):
     txFrame = struct.pack("<BbHfBBBB", 0x34, buzzer, servo, speed, 0, 0, xorCheck, 0x43)
     uart6.write(txFrame)
 
+direction = 1
 try:
     while True:
         setting = termios.tcgetattr(sys.stdin)
         InPut = getKey(setting)
         buzzer = -1
-        servo = 1500
+        servo = 1500 
         speed = 2.5
 
         if InPut == "q":
             break
         if InPut == "w":
-            speed = 1.0
-            servo = 1500
+            speed = 1.5
+            servo = 1500 
             uart_send(speed, buzzer, servo)
         if InPut == "s":
-            speed = -1.0
-            servo = 1500
+            speed = -1.5
+            servo =  1500 
             uart_send(speed, buzzer, servo)
         if InPut == "d":
-            speed = 1.0
-            servo = 1300
+            speed = direction * 1.5
+            servo = 1300 
             uart_send(speed, buzzer, servo)
         if InPut == "a":
-            speed = 1.0
-            servo = 1700
+            speed = direction * 1.5
+            servo = 1700 
             uart_send(speed, buzzer, servo)
+        if InPut == "e":
+            direction *= -1
 except KeyboardInterrupt:
     uart6.close()
     print(txFrame.hex())

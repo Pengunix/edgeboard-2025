@@ -26,50 +26,10 @@ public:
     int right_up = 0, right_stage = 0;
     int right_down = 0, right_down_1 = 0;
 
-    // if (track.pointsEdgeRight.size() < ROWSIMAGE / 2 ||
-    // track.pointsEdgeLeft.size() < ROWSIMAGE / 2) // 十字有效行限制
-    //     return false;
-
-    // vector<Point2f> pointsToTransform_left =
-    // convertPointsToCvPoints(track.pointsEdgeLeft),
-    //         pointsToTransform_right =
-    //         convertPointsToCvPoints(track.pointsEdgeRight),
-    //         transformedPoints;
-    // vector<POINT> transformedPoints_Left, transformedPoints_Right;
-
-    // //左边线逆透视
-    // perspectiveTransform(pointsToTransform_left, transformedPoints, inv_Mat);
-    // transformedPoints_Left = convertCvPointsToPoints(transformedPoints);
-    // //右边线逆透视
-    // perspectiveTransform(pointsToTransform_right, transformedPoints,
-    // inv_Mat); transformedPoints_Right =
-    // convertCvPointsToPoints(transformedPoints);
-
-    // transformedPoints_Left = blur_points(transformedPoints_Left,
-    // using_kernel_num);   //三角滤波 transformedPoints_Right =
-    // blur_points(transformedPoints_Right, using_kernel_num);
-    // transformedPoints_Left = resample_points(transformedPoints_Left,
-    // using_resample_dist*pixel_per_meter);  //下采样 transformedPoints_Right =
-    // resample_points(transformedPoints_Right,
-    // using_resample_dist*pixel_per_meter);
-
-    // for(int i=0;i<transformedPoints_Left.size()-3;i += 1)
-    // {
-
-    //     int n1_x = transformedPoints_Left[i].x -
-    //     transformedPoints_Left[i+1].x; int n1_y = transformedPoints_Left[i].y
-    //     - transformedPoints_Left[i+1].y; int n2_x =
-    //     transformedPoints_Left[i+2].x - transformedPoints_Left[i+3].x; int
-    //     n2_y = transformedPoints_Left[i+2].y - transformedPoints_Left[i+3].y;
-
-    //     double n1_len = sqrt(n1_x*n1_x + n1_x*n1_y);
-    //     float n2_len = sqrt(n2_x*n2_x + n2_y*n2_y);
-    //     float ang_cos = float(n1_x*n2_x + n1_y*n2_y) / (n1_len * n2_len);
-    //     ang_cos = ang_cos>1 ? 1 : ang_cos;
-    //     float ang = acos(ang_cos)*180/3.14159;
-    //     if(ang>80 && n2_y>0) {left_down_1 = i;break;}
-    // }
-
+    // 当track.pointsEdgeRight.size()小于10时，size - 10会下溢
+    if (track.pointsEdgeLeft.size() <= 10) {
+      return false;
+    }
     for (int i = 10; i < (track.pointsEdgeLeft.size() - 10); i += 2) {
       // if(!left_down && left_down_1!=0 && track.pointsEdgeLeft[i - 5].y -
       // track.pointsEdgeLeft[i].y >= 2
@@ -77,9 +37,8 @@ public:
       //     >= 2) left_down = i-10;
       if (i>(track.pointsEdgeLeft.size())) break;
       // std::cout << "i " << i << " size " << track.pointsEdgeLeft.size() << std::endl; 
-      // TODO(me): 这里为什么会越界
       if (track.pointsEdgeLeft[i].y - track.pointsEdgeLeft[i - 5].y <= -20 &&
-          track.pointsEdgeLeft[i - 5].y >= track.pointsEdgeLeft[i - 10].y) {
+          track.pointsEdgeLeft[i - 5].y >= track.pointsEdgeLeft[i - 9].y) {
         if (left_down == 0)
           left_down = i - 5;
         else if (track.pointsEdgeLeft[i - 5].y >
@@ -89,10 +48,10 @@ public:
           left_down = i - 5;
       }
       if (2 * track.pointsEdgeLeft[i - 5].y - track.pointsEdgeLeft[i].y -
-                  track.pointsEdgeLeft[i - 10].y >=
+                  track.pointsEdgeLeft[i - 9].y >=
               10 &&
           track.pointsEdgeLeft[i - 5].y - track.pointsEdgeLeft[i].y >= 2 &&
-          track.pointsEdgeLeft[i - 5].y - track.pointsEdgeLeft[i - 10].y >= 2) {
+          track.pointsEdgeLeft[i - 5].y - track.pointsEdgeLeft[i - 9].y >= 2) {
         if (left_down == 0)
           left_down = i - 5;
         else if (track.pointsEdgeLeft[i - 5].y >
@@ -104,7 +63,7 @@ public:
 
       if (track.pointsEdgeLeft[i].y - track.pointsEdgeLeft[i - 5].y >= -5 &&
           track.pointsEdgeLeft[i].y - track.pointsEdgeLeft[i - 5].y <= 4 &&
-          track.pointsEdgeLeft[i - 5].y - track.pointsEdgeLeft[i - 10].y >=
+          track.pointsEdgeLeft[i - 5].y - track.pointsEdgeLeft[i - 9].y >=
               20) {
         if (left_up == 0)
           left_up = i - 5;
@@ -113,32 +72,14 @@ public:
       }
     }
 
-    // for(int i=2;i<transformedPoints_Right.size()-3;i += 1)
-    // {
-    //     int n1_x = transformedPoints_Right[i].x -
-    //     transformedPoints_Right[i+1].x; int n1_y =
-    //     transformedPoints_Right[i].y - transformedPoints_Right[i+1].y; int
-    //     n2_x = transformedPoints_Right[i+2].x -
-    //     transformedPoints_Right[i+3].x; int n2_y =
-    //     transformedPoints_Right[i+2].y - transformedPoints_Right[i+3].y;
-    //     float n1_len = sqrt(n1_x*n1_x + n1_y*n1_y);
-    //     float n2_len = sqrt(n2_x*n2_x + n2_y*n2_y);
-    //     float ang_cos = float(n1_x*n2_x + n1_y*n2_y) / (n1_len * n2_len);
-    //     ang_cos = ang_cos>1 ? 1 : ang_cos;
-    //     float ang = acos(ang_cos)*180/3.14159;
-    //     ang = abs(ang)>90 ? (180-abs(ang)) : abs(ang);
-    //     if(ang>80 && n2_y<0) {right_down_1 = i;break;}
-    // }
-
+  
+    // 当track.pointsEdgeRight.size()小于10时，size - 10会下溢
+    if (track.pointsEdgeRight.size() <= 10) {
+      return false;
+    }
     for (int i = 10; i < track.pointsEdgeRight.size() - 10; i += 2) {
-      // if(!right_down && right_down_1!=0 &&track.pointsEdgeRight[i - 5].y -
-      // track.pointsEdgeRight[i].y <= -2 &&
-      //     track.pointsEdgeRight[i - 5].y - track.pointsEdgeRight[i - 10].y <=
-      //     -2) right_down = i-10;
-      if (i>(track.pointsEdgeLeft.size())) break;
-      // TODO(me): 这里也越界
       if (track.pointsEdgeRight[i].y - track.pointsEdgeRight[i - 5].y >= 20 &&
-          track.pointsEdgeRight[i - 5].y <= track.pointsEdgeRight[i - 10].y) {
+          track.pointsEdgeRight[i - 5].y <= track.pointsEdgeRight[i - 9].y) {
         if (right_down == 0)
           right_down = i - 5;
         else if (track.pointsEdgeRight[i - 5].y <
@@ -148,10 +89,10 @@ public:
           right_down = i - 5;
       }
       if (2 * track.pointsEdgeRight[i - 5].y - track.pointsEdgeRight[i].y -
-                  track.pointsEdgeRight[i - 10].y <=
+                  track.pointsEdgeRight[i - 9].y <=
               -10 &&
           track.pointsEdgeRight[i - 5].y - track.pointsEdgeRight[i].y <= -2 &&
-          track.pointsEdgeRight[i - 5].y - track.pointsEdgeRight[i - 10].y <=
+          track.pointsEdgeRight[i - 5].y - track.pointsEdgeRight[i - 9].y <=
               -2) {
         if (right_down == 0)
           right_down = i - 5;
@@ -164,7 +105,7 @@ public:
 
       if (track.pointsEdgeRight[i].y - track.pointsEdgeRight[i - 5].y <= 5 &&
           track.pointsEdgeRight[i].y - track.pointsEdgeRight[i - 5].y >= -4 &&
-          track.pointsEdgeRight[i - 5].y - track.pointsEdgeRight[i - 10].y <=
+          track.pointsEdgeRight[i - 5].y - track.pointsEdgeRight[i - 9].y <=
               -20) {
         if (right_up == 0)
           right_up = i - 5;
@@ -172,12 +113,6 @@ public:
           right_up = i - 5;
       }
     }
-
-    // if (track.pointsEdgeLeft[left_up].x >= track.pointsEdgeLeft[left_down].x)
-    // left_down = 0; if (track.pointsEdgeRight[right_up].x >=
-    // track.pointsEdgeRight[right_down].x) right_down = 0;
-    // std::cout << left_up << std::endl;
-    // TODO(me) 这里也会越界
     if (abs(track.pointsEdgeLeft[left_up].x -
             track.pointsEdgeLeft[left_down].x) < 10)
       left_up = 0;
@@ -215,17 +150,6 @@ public:
           left_begin++;
         if (track.pointsEdgeLeft[left_begin].x !=
             track.pointsEdgeLeft[left_down].x) {
-          // if(track.pointsEdgeLeft[left_down].y +
-          //         (track.pointsEdgeLeft[left_down].x -
-          //         track.pointsEdgeLeft[track.pointsEdgeLeft.size()-1].x) *
-          //         (track.pointsEdgeLeft[left_down].y -
-          //         track.pointsEdgeLeft[left_begin].y) /
-          //         (track.pointsEdgeLeft[left_begin].x -
-          //         track.pointsEdgeLeft[left_down].x) >=
-          //         track.pointsEdgeRight[track.pointsEdgeRight.size()-1].y)
-          //     {left_down=0;}
-          // else
-          // {
           int temp_y;
           for (int i = left_down + 1; i < track.pointsEdgeLeft.size(); i++) {
             temp_y = track.pointsEdgeLeft[left_down].y +
@@ -255,18 +179,7 @@ public:
           left_end--;
         if (track.pointsEdgeLeft[left_up].x !=
             track.pointsEdgeLeft[left_end].x) {
-          // if(track.pointsEdgeLeft[left_up].y -
-          //         (track.pointsEdgeLeft[0].x -
-          //         track.pointsEdgeLeft[left_up].x) *
-          //         (track.pointsEdgeLeft[left_end].y -
-          //         track.pointsEdgeLeft[left_up].y) /
-          //         (track.pointsEdgeLeft[left_up].x -
-          //         track.pointsEdgeLeft[left_end].x)>=track.pointsEdgeRight[0].y)
-          // {
-          //     left_up=0;
-          // }
-          // else
-          // {
+
           int temp_y;
           for (int i = left_up - 1; i >= 0; i--) {
             temp_y =
@@ -317,21 +230,6 @@ public:
                    track.pointsEdgeRight[right_down].y) > 10 &&
                right_begin < right_down - 10)
           right_begin++;
-        // if (track.pointsEdgeRight[right_begin].x !=
-        // track.pointsEdgeRight[right_down].x)
-        // {
-        //     if(track.pointsEdgeRight[right_down].y +
-        //             (track.pointsEdgeRight[right_down].x -
-        //             track.pointsEdgeRight[track.pointsEdgeRight.size()-1].x)
-        //             * (track.pointsEdgeRight[right_down].y -
-        //             track.pointsEdgeRight[right_begin].y) /
-        //             (track.pointsEdgeRight[right_begin].x -
-        //             track.pointsEdgeRight[right_down].x)<=track.pointsEdgeLeft[track.pointsEdgeLeft.size()-1].y)
-        //     {
-        //         right_down=0;
-        //     }
-        //     else
-        //     {
         int temp_y;
         for (int i = right_down + 1; i < track.pointsEdgeRight.size(); i++) {
           temp_y = track.pointsEdgeRight[right_down].y +
@@ -359,21 +257,6 @@ public:
                    track.pointsEdgeRight[right_up].y) > 10 &&
                right_end > right_up + 10)
           right_end--;
-        // if (track.pointsEdgeRight[right_up].x !=
-        // track.pointsEdgeRight[right_end].x)
-        // {
-        //     if(track.pointsEdgeRight[right_up].y -
-        //             (track.pointsEdgeRight[0].x -
-        //             track.pointsEdgeRight[right_up].x) *
-        //             (track.pointsEdgeRight[right_end].y -
-        //             track.pointsEdgeRight[right_up].y) /
-        //             (track.pointsEdgeRight[right_up].x -
-        //             track.pointsEdgeRight[right_end].x)<=track.pointsEdgeLeft[0].y)
-        //     {
-        //         right_up=0;
-        //     }
-        //     else
-        //     {
         int temp_y;
         for (int i = right_up - 1; i >= 0; i--) {
           temp_y =
@@ -390,7 +273,6 @@ public:
           else
             track.pointsEdgeRight[i].y = temp_y;
         }
-        // }
       }
     }
 
@@ -413,82 +295,6 @@ public:
       crossstraight = true;
 
     return left_up || left_down || right_up || right_down;
-  }
-
-  /**
-   * @brief 绘制十字道路识别结果
-   *
-   * @param Image 需要叠加显示的图像/RGB
-   */
-  void drawImage(Tracking track, cv::Mat &Image) {
-    // // 绘制边缘点
-    // for (int i = 0; i < track.pointsEdgeLeft.size(); i++)
-    // {
-    //     circle(Image, Point(track.pointsEdgeLeft[i].y,
-    //     track.pointsEdgeLeft[i].x), 2,
-    //            Scalar(0, 255, 0), -1); // 绿色点
-    // }
-    // for (int i = 0; i < track.pointsEdgeRight.size(); i++)
-    // {
-    //     circle(Image, Point(track.pointsEdgeRight[i].y,
-    //     track.pointsEdgeRight[i].x), 2,
-    //            Scalar(0, 255, 255), -1); // 黄色点
-    // }
-
-    // // 绘制岔路点
-    // for (int i = 0; i < track.spurroad.size(); i++)
-    // {
-    //     circle(Image, Point(track.spurroad[i].y, track.spurroad[i].x), 6,
-    //            Scalar(0, 0, 255), -1); // 红色点
-    // }
-
-    // // 斜入十字绘制补线起止点
-    // if (crossroadType == CrossroadType::CrossroadRight) // 右入十字
-    // {
-    //     circle(Image, Point(pointBreakLU.y, pointBreakLU.x), 5, Scalar(226,
-    //     43, 138), -1); // 上补线点：紫色 circle(Image, Point(pointBreakLD.y,
-    //     pointBreakLD.x), 5, Scalar(255, 0, 255), -1);  // 下补线点：粉色 if
-    //     (pointBreakRU.x > 0)
-    //         circle(Image, Point(pointBreakRU.y, pointBreakRU.x), 5,
-    //         Scalar(226, 43, 138), -1); // 上补线点：紫色
-    //     if (pointBreakRD.x > 0)
-    //         circle(Image, Point(pointBreakRD.y, pointBreakRD.x), 5,
-    //         Scalar(255, 0, 255), -1); // 下补线点：粉色
-
-    //     putText(Image, "Right", Point(COLSIMAGE / 2 - 15, ROWSIMAGE - 20),
-    //     cv::FONT_HERSHEY_TRIPLEX, 0.3, cv::Scalar(0, 255, 0), 1, CV_AA);
-    // }
-    // else if (crossroadType == CrossroadType::CrossroadLeft) // 左入十字
-    // {
-    //     circle(Image, Point(pointBreakRU.y, pointBreakRU.x), 5, Scalar(226,
-    //     43, 138), -1); // 上补线点：紫色 circle(Image, Point(pointBreakRD.y,
-    //     pointBreakRD.x), 5, Scalar(255, 0, 255), -1);  // 下补线点：粉色 if
-    //     (pointBreakLU.x > 0)
-    //         circle(Image, Point(pointBreakLU.y, pointBreakLU.x), 5,
-    //         Scalar(226, 43, 138), -1); // 上补线点：紫色
-    //     if (pointBreakLD.x > 0)
-    //         circle(Image, Point(pointBreakLD.y, pointBreakLD.x), 5,
-    //         Scalar(255, 0, 255), -1); // 下补线点：粉色
-
-    //     putText(Image, "Left", Point(COLSIMAGE / 2 - 15, ROWSIMAGE - 20),
-    //     cv::FONT_HERSHEY_TRIPLEX, 0.3, cv::Scalar(0, 255, 0), 1, CV_AA);
-    // }
-    // else if (crossroadType == CrossroadType::CrossroadStraight) // 直入十字
-    // {
-    //     circle(Image, Point(pointBreakLU.y, pointBreakLU.x), 5, Scalar(226,
-    //     43, 138), -1); // 上补线点：紫色 circle(Image, Point(pointBreakLD.y,
-    //     pointBreakLD.x), 5, Scalar(255, 0, 255), -1);  // 下补线点：粉色
-    //     circle(Image, Point(pointBreakRU.y, pointBreakRU.x), 5, Scalar(226,
-    //     43, 138), -1); // 上补线点：紫色 circle(Image, Point(pointBreakRD.y,
-    //     pointBreakRD.x), 5, Scalar(255, 0, 255), -1);  // 下补线点：粉色
-    //     putText(Image, "Straight", Point(COLSIMAGE / 2 - 20, ROWSIMAGE - 20),
-    //     cv::FONT_HERSHEY_TRIPLEX, 0.3, cv::Scalar(0, 255, 0), 1, CV_AA);
-    // }
-
-    // putText(Image, "[6] CROSS - ENABLE", Point(COLSIMAGE / 2 - 30, 10),
-    // cv::FONT_HERSHEY_TRIPLEX, 0.3, cv::Scalar(0, 255, 0), 1, CV_AA);
-    // putText(Image, to_string(_index), Point(COLSIMAGE / 2 - 5, ROWSIMAGE -
-    // 40), cv::FONT_HERSHEY_TRIPLEX, 0.5, cv::Scalar(0, 0, 155), 1, CV_AA);
   }
 
 private:

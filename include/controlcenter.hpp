@@ -40,7 +40,8 @@ public:
 
     if (scene == Scene::NormalScene || scene == Scene::CrossScene ||
         scene == Scene::ParkingScene || scene == Scene::RingScene ||
-        scene == Scene::LaybyScene || scene == Scene::BridgeScene || scene ==Scene::CateringScene) {
+        scene == Scene::LaybyScene || scene == Scene::BridgeScene ||
+        scene == Scene::CateringScene) {
 #if BOUNDARY_SHOW
       // 逆透视图像
       cv::Mat only_boundary =
@@ -55,15 +56,19 @@ public:
                                transformedPoints;
       // 防止点集为空导致逆透视throw
       if (pointsToTransform_left.size() < 5 ||
-          pointsToTransform_left.size() > 200)
+          pointsToTransform_left.size() > 200) {
         pointsToTransform_left = last_pointsToTransform_left;
-      else
+        spdlog::warn("[controlcenter] 逆透视点集异常");
+      } else {
         last_pointsToTransform_left = pointsToTransform_left;
+      }
       if (pointsToTransform_right.size() < 5 ||
-          pointsToTransform_right.size() > 200)
+          pointsToTransform_right.size() > 200) {
         pointsToTransform_right = last_pointsToTransform_right;
-      else
+        spdlog::warn("[controlcenter] 逆透视点集异常");
+      } else {
         last_pointsToTransform_right = pointsToTransform_right;
+      }
 
       // 左边线逆透视
       perspectiveTransform(pointsToTransform_left, transformedPoints,
@@ -183,7 +188,8 @@ public:
           track_rightline(transformedPoints_Right, 5, 0.225 * pixel_per_meter);
       // centerEdge1[begin_id].x = car.x;
       // centerEdge1[begin_id].y = car.y;
-      // // std::cout << "centerEdge1 size" << centerEdge1.size() << std::endl;
+      // // std::cout << "centerEdge1 size" << centerEdge1.size() <<
+      // std::endl;
       // // std::cout << "begin id" << begin_id << std::endl;
       // centerEdge1 = resample_points(
       //     std::vector<POINT>(centerEdge1.begin() + begin_id,
@@ -389,14 +395,16 @@ public:
     putText(centerImage, style, cv::Point(COLSIMAGE - 60, dis),
             cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(0, 0, 255), 1); // 赛道类型
 
-    str = "Edge: " + formatDoble2String(track.stdevLeft, 1) + " | " +
-          formatDoble2String(track.stdevRight, 1);
+    str = "Edge: " + formatDouble2String(track.stdevLeft, 1) + " | " +
+          formatDouble2String(track.stdevRight, 1);
     putText(centerImage, str, cv::Point(COLSIMAGE - 150, 2 * dis),
-            cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(0, 0, 255), 1); // 斜率：左|右
+            cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(0, 0, 255),
+            1); // 斜率：左|右
 
-    str = "Center: " + formatDoble2String(sigmaCenter, 2);
+    str = "Center: " + formatDouble2String(sigmaCenter, 2);
     putText(centerImage, str, cv::Point(COLSIMAGE - 120, 3 * dis),
-            cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(0, 0, 255), 1); // 中心点方差
+            cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(0, 0, 255),
+            1); // 中心点方差
 
     putText(centerImage, std::to_string(controlCenter),
             cv::Point(COLSIMAGE / 2 - 10, ROWSIMAGE - 40),

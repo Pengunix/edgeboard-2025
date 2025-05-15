@@ -4,7 +4,7 @@ set(CMAKE_C_COMPILER "/usr/bin/gcc")
 
 project(icar)
 set(CMAKE_CXX_STANDARD 17)
-# 调试关闭 -flto
+# 调试关闭 -flto -O2
 set(CMAKE_CXX_FLAGS "-Og -g -mcpu=native")
 set(CMAKE_INSTALL_PREFIX /root/nfs)
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
@@ -62,6 +62,7 @@ target_precompile_headers(${CMAKE_PROJECT_NAME} PUBLIC
         ${PROJECT_SOURCE_DIR}/include/capture.hpp
         ${PROJECT_SOURCE_DIR}/include/motion.hpp
         ${PROJECT_SOURCE_DIR}/include/preprocess.hpp
+        ${PROJECT_SOURCE_DIR}/include/common.hpp
 )
 target_link_libraries(
         ${CMAKE_PROJECT_NAME}

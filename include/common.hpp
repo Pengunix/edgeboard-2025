@@ -218,6 +218,33 @@ int factorial(int x) {
   return f;
 }
 
+// 由两点生成离散直线
+std::vector<POINT> points2line(POINT a, POINT b) {
+  std::vector<POINT> output;
+  int dx = abs(b.x - a.x);
+  int dy = abs(b.y - a.y);
+  int sx = a.x < b.x ? 1 : -1;
+  int sy = a.y < b.y ? 1 : -1;
+  int err = dx - dy;
+
+  while (true) {
+    output.push_back(a);
+    if (a.x == b.x && a.y == b.y)
+      break;
+    int e2 = err * 2;
+    if (e2 > -dy) {
+      err -= dy;
+      a.x += sx;
+    }
+    if (e2 < dx) {
+      err += dx;
+      a.y += sy;
+    }
+  }
+  return output;
+}
+
+
 /**
  * @brief 贝塞尔曲线
  *
@@ -250,7 +277,7 @@ std::vector<POINT> Bezier(double dt, std::vector<POINT> input) {
   return output;
 }
 
-auto formatDoble2String(double val, int fixed) {
+auto formatDouble2String(double val, int fixed) {
   auto str = std::to_string(val);
   return str.substr(0, str.find(".") + fixed + 1);
 }
@@ -292,7 +319,7 @@ double distanceForPoints(POINT a, POINT b) {
 std::vector<cv::Point2f> convertPointsToCvPoints(std::vector<POINT> &edge) {
   std::vector<cv::Point2f> cvPoints;
   for (int i = 0; i < edge.size(); i++) {
-    cvPoints.push_back(cv::Point2f(edge[i].y, edge[i].x));
+    cvPoints.emplace_back(cv::Point2f(edge[i].y, edge[i].x));
   }
   return cvPoints;
 } // POINT to Point2f
@@ -505,119 +532,3 @@ cv::Mat draw_boundary_ipm(std::vector<POINT> left_edge,
 
   return only_boundary;
 }
-
-/**
- * @brief UI综合图像绘制
- *
- */
-class Display {
-private:
-  bool enable = false;   // 显示窗口使能
-  int sizeWindow = 1;    // 窗口数量
-  cv::Mat imgShow;       // 窗口图像
-  bool realShow = false; // 实时更新画面
-public:
-  int index = 0;      // 图像序号
-  int indexLast = -1; // 图像序号
-  int frameMax = 0;   // 视频总帧数
-  bool save = false;  // 图像存储
-
-  /**
-   * @brief 显示窗口初始化
-   *
-   * @param size 窗口数量(1~7)
-   */
-  void init(const int size) {
-    if (size <= 0 || size > 7)
-      return;
-
-    cv::namedWindow("ICAR", cv::WINDOW_NORMAL); // 图像名称
-    cv::resizeWindow("ICAR", 480 * 2, 320 * 2); // 分辨率
-
-    imgShow = cv::Mat::zeros(ROWSIMAGE * 2, COLSIMAGE * 2, CV_8UC3);
-    enable = true;
-    sizeWindow = size;
-  }
-
-  /**
-   * @brief 设置新窗口属性
-   *
-   * @param index 窗口序号
-   * @param name 窗口名称
-   * @param img 显示图像
-   */
-  void setNewWindow(int index, std::string name, cv::Mat img) {
-    // 数据溢出保护
-    if (!enable || index <= 0 || index > sizeWindow)
-      return;
-
-    if (img.cols <= 0 || img.rows <= 0)
-      return;
-
-    cv::Mat imgDraw = img.clone();
-
-    if (imgDraw.type() == CV_8UC1) // 非RGB类型的图像
-      cvtColor(imgDraw, imgDraw, cv::COLOR_GRAY2BGR);
-
-    // 图像缩放
-    if (imgDraw.cols != COLSIMAGE || imgDraw.rows != ROWSIMAGE) {
-      float fx = COLSIMAGE / imgDraw.cols;
-      float fy = ROWSIMAGE / imgDraw.rows;
-      if (fx <= fy)
-        resize(imgDraw, imgDraw, cv::Size(COLSIMAGE, ROWSIMAGE), fx, fx);
-      else
-        resize(imgDraw, imgDraw, cv::Size(COLSIMAGE, ROWSIMAGE), fy, fy);
-    }
-
-    // 限制图片标题长度
-    std::string text = "[" + std::to_string(index) + "] ";
-    if (name.length() > 15)
-      text = text + name.substr(0, 15);
-    else
-      text = text + name;
-
-    putText(imgDraw, text, cv::Point(10, 20), cv::FONT_HERSHEY_TRIPLEX, 0.5,
-            cv::Scalar(255, 0, 0), 0.5);
-
-    if (index <= 2) {
-      cv::Rect placeImg =
-          cv::Rect(COLSIMAGE * (index - 1), 0, COLSIMAGE, ROWSIMAGE);
-      imgDraw.copyTo(imgShow(placeImg));
-    }
-
-    else {
-      cv::Rect placeImg =
-          cv::Rect(COLSIMAGE * (index - 3), ROWSIMAGE, COLSIMAGE, ROWSIMAGE);
-      imgDraw.copyTo(imgShow(placeImg));
-    }
-
-    if (save)
-      savePicture(img); // 保存图像
-  }
-
-  /**
-   * @brief 融合后的图像显示
-   *
-   */
-  void show(void) {
-    if (enable) {
-      cv::putText(imgShow, "Frame:" + std::to_string(index),
-                  cv::Point(COLSIMAGE / 2 - 50, ROWSIMAGE * 2 - 20),
-                  cv::FONT_HERSHEY_TRIPLEX, 0.5, cv::Scalar(0, 255, 0), 0.5);
-      cv::imshow("ICAR", imgShow);
-
-      char key = cv::waitKey(1);
-      if (key != -1) {
-        if (key == 32) // 空格
-          realShow = !realShow;
-      }
-      if (realShow) {
-        index++;
-        if (index < 0)
-          index = 0;
-        if (index > frameMax)
-          index = frameMax;
-      }
-    }
-  }
-};

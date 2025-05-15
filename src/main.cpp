@@ -23,9 +23,12 @@ int main(int argc, char const *argv[]) {
   Crossroad crossroad;
   Ring ring;
   Bridge bridge;
-  Catering catering;
+  Catering catering(motion.params.cateringTravelTime,
+                    motion.params.cateringTurningTime,
+                    motion.params.cateringStopTime);
   Obstacle obstacle;
-  Layby layby;
+  Layby layby(motion.params.laybyMoment,
+               motion.params.laybyStopTime);
   Parking parking;
   StopArea stopArea;
   ControlCenter ctrlCenter;
@@ -71,22 +74,22 @@ int main(int argc, char const *argv[]) {
   if (motion.params.debug) {
   }
 
-  // // 等待按键发车
-  // if (!motion.params.debug) {
-  //   spdlog::info("初始化完毕，等待按键发车");
-  //   uart->buzzer = BUZZER_OK;
-  //   // TODO(me) 选一下判断，判断特定按键
-  //   while (!uart->keypress) {
-  //     cv::waitKey(300);
-  //   }
-  //   // 延时3s发车
-  //   for (int i = 0; i < 10; ++i) {
-  //     uart->carControl(0, PWMSERVOMID);
-  //     cv::waitKey(300);
-  //   }
-  //   uart->buzzer = BUZZER_START;
-  //   uart->carControl(0, PWMSERVOMID);
-  // }
+  // 等待按键发车
+  if (!motion.params.debug) {
+    spdlog::info("初始化完毕，等待按键发车");
+    uart->buzzer = BUZZER_OK;
+    // TODO(me) 选一下判断，判断特定按键
+    while (!uart->keypress) {
+      cv::waitKey(300);
+    }
+    // 延时3s发车
+    for (int i = 0; i < 10; ++i) {
+      uart->carControl(0, PWMSERVOMID);
+      cv::waitKey(300);
+    }
+    uart->buzzer = BUZZER_START;
+    uart->carControl(0, PWMSERVOMID);
+  }
 
   // 初始化参数
   Scene scene = Scene::NormalScene;
@@ -146,6 +149,7 @@ int main(int argc, char const *argv[]) {
       // 图像绘制赛道识别结果
       tracking.drawImage(imgTrack);
       // display.setNewWindow(2, "Track", imgTrack);
+      cv::imshow("Track", imgTrack);
     }
 
     //[05] 停车区检测
@@ -167,15 +171,15 @@ int main(int argc, char const *argv[]) {
         motion.params.catering) {
       if (catering.process(tracking, imgBinary, detection->results)) {
         scene = Scene::CateringScene;
-      }
-      else
+      } else
         scene = Scene::NormalScene;
     }
 
     //[07] 临时停车区检测
     if ((scene == Scene::NormalScene || scene == Scene::LaybyScene) &&
         motion.params.catering) {
-      if (layby.process(tracking, imgBinary, detection->results))
+      if (layby.process(tracking, imgBinary, detection->results,
+                        motion.params.laybyCurtailOffset))
         scene = Scene::LaybyScene;
       else
         scene = Scene::NormalScene;
@@ -186,7 +190,7 @@ int main(int argc, char const *argv[]) {
         motion.params.parking) {
       if (parking.process(tracking, imgBinary, detection->results)) {
         scene = Scene::ParkingScene;
-        // parking.drawImage(tracking, img);
+        parking.drawImage(tracking, img);
       } else {
         scene = Scene::NormalScene;
       }
@@ -220,7 +224,6 @@ int main(int argc, char const *argv[]) {
           motion.params.ringEnter2, motion.params.ringEnter3};
       if (ring.ringRecognition(tracking, motion.params.ringSum, ringEnter,
                                roadwidth)) {
-        uart->buzzer = BUZZER_WARNNING;
         scene = Scene::RingScene;
       } else {
         scene = Scene::NormalScene;
@@ -239,7 +242,7 @@ int main(int argc, char const *argv[]) {
                        motion.params.track_startline, ring.ringStep, ring.R100,
                        ring.ringType, catering.burgerLeft);
 
-    if (0 && scene != Scene::ParkingScene) {
+    if (scene != Scene::ParkingScene) {
       if (ctrlCenter.derailmentCheck(tracking)) {
         uart->carControl(0, PWMSERVOMID);
         std::this_thread::sleep_for(1s);
@@ -301,8 +304,8 @@ int main(int argc, char const *argv[]) {
           ring.ringStep == RingStep::Verifing) {
         P = motion.params.pl * motion.pure_angle * motion.pure_angle / 50 +
             motion.params.ph;
-        if (P > 9)
-          P = 9;
+        if (P > 11)
+          P = 11;
         D = motion.params.NormD;
       } else {
         if (ring.ringNum == 0) {
@@ -330,7 +333,7 @@ int main(int argc, char const *argv[]) {
       ctrlCenter.drawImage(tracking, scene, img);
 
       putText(img,
-              formatDoble2String(1000.0 / (startTime - preTime), 1) + "fps",
+              formatDouble2String(1000.0 / (startTime - preTime), 1) + "FPS",
               cv::Point(COLSIMAGE - 70, 80), cv::FONT_HERSHEY_PLAIN, 1,
               cv::Scalar(0, 0, 255), 1);
 

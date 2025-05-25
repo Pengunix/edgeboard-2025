@@ -162,38 +162,38 @@ public:
       }
       speed_centeredge = centerEdge; // 用作速度策略的中线
 
-      // // 找最近点(起始点中线归一化)
-      // POINT car(ROWSIMAGE - 1, COLSIMAGE / 2);
-      // float min_dist = 1e10;
-      // int begin_id = -1;
-      // for (int i = 0; i < centerEdge.size(); i++) {
-      //   float dx = centerEdge[i].x - car.x;
-      //   float dy = centerEdge[i].y - car.y;
-      //   float dist = sqrt(dx * dx + dy * dy);
-      //   if (dist < min_dist) {
-      //     min_dist = dist;
-      //     begin_id = i;
-      //   }
-      // }
-      // if (begin_id >= centerEdge.size() - 1) {
-      //   begin_id = 0;
-      // }
-      // centerEdge[begin_id].x = car.x;
-      // centerEdge[begin_id].y = car.y;
-      // centerEdge = resample_points(
-      //     std::vector<POINT>(centerEdge.begin() + begin_id,
-      //     centerEdge.end()), using_resample_dist * pixel_per_meter);
+      // 找最近点(起始点中线归一化)
+      POINT car(ROWSIMAGE - 1, COLSIMAGE / 2);
+      float min_dist = 1e10;
+      int begin_id = -1;
+      for (int i = 0; i < centerEdge.size(); i++) {
+        float dx = centerEdge[i].x - car.x;
+        float dy = centerEdge[i].y - car.y;
+        float dist = sqrt(dx * dx + dy * dy);
+        if (dist < min_dist) {
+          min_dist = dist;
+          begin_id = i;
+        }
+      }
+      // 防止下溢
+      if (centerEdge.size() > 1 && begin_id >= centerEdge.size() - 1) {
+        begin_id = 0;
+      }
+      centerEdge[begin_id].x = car.x;
+      centerEdge[begin_id].y = car.y;
+      centerEdge = resample_points(
+          std::vector<POINT>(centerEdge.begin() + begin_id,
+          centerEdge.end()), using_resample_dist * pixel_per_meter);
       // //中线下采样
       centerEdge1 =
           track_rightline(transformedPoints_Right, 5, 0.225 * pixel_per_meter);
-      // centerEdge1[begin_id].x = car.x;
-      // centerEdge1[begin_id].y = car.y;
-      // // std::cout << "centerEdge1 size" << centerEdge1.size() <<
-      // std::endl;
-      // // std::cout << "begin id" << begin_id << std::endl;
-      // centerEdge1 = resample_points(
-      //     std::vector<POINT>(centerEdge1.begin() + begin_id,
-      //     centerEdge1.end()), using_resample_dist * pixel_per_meter);
+      centerEdge1[begin_id].x = car.x;
+      centerEdge1[begin_id].y = car.y;
+
+      // std::cout << "begin id" << begin_id << std::endl;
+      centerEdge1 = resample_points(
+          std::vector<POINT>(centerEdge1.begin() + begin_id,
+          centerEdge1.end()), using_resample_dist * pixel_per_meter);
 
       std::vector<cv::Point2f> pointsToTransform_center =
           convertPointsToCvPoints(centerEdge); // 中线转为cvpoint

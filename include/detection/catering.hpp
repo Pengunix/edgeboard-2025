@@ -39,7 +39,7 @@ public:
       return true;
     } else {
       for (size_t i = 0; i < predict.size(); i++) {
-        if (predict[i].type == LABEL_BURGER && predict[i].score > 0.7 &&
+        if (predict[i].type == LABEL_BURGER && predict[i].score > 0.75 &&
             (predict[i].y + predict[i].height) > ROWSIMAGE * 0.3) {
           counterRec++;
           noRing = true;
@@ -59,7 +59,13 @@ public:
           counterSession = 0;
           cateringEnable = true; // 检测到汉堡标志
           // TODO(me) : 若汉堡误判率过大，增加边线跳变约束
-          return true;
+          if ((burgerLeft && track.stdevRight > 100) ||
+              !burgerLeft && track.stdevLeft > 100) {
+            return true;
+          } else {
+            return false;
+          }
+
         } else if (counterSession >= 8) {
           counterRec = 0;
           counterSession = 0;
@@ -100,5 +106,5 @@ private:
   int burgerY = 0;             // 汉堡高度
   int turningTime = 50;        // 转弯时间 25帧
   int travelTime = 10; // 行驶时间 10帧 在斜线路段的行驶时间
-  int stopTime = 100;   // 停车时间 25帧
+  int stopTime = 100;  // 停车时间 25帧
 };

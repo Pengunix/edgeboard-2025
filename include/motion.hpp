@@ -82,15 +82,17 @@ public:
     float pl = 0.0;
     float ph = 0.0;
 
-    bool debug = false;          // 调试模式使能
-    bool saveImg = false;        // 存图使能
-    uint16_t rowCutUp = 0;       // 图像顶部切行
-    uint16_t rowCutBottom = 0;   // 图像顶部切行
+    bool debug = false;        // 调试模式使能
+    bool saveImg = false;      // 存图使能
+    uint16_t rowCutUp = 0;     // 图像顶部切行
+    uint16_t rowCutBottom = 0; // 图像顶部切行
+    int parkingStopTime = 100;
+    int parkingTurningTime = 21;
     int laybyCurtailOffset = 50; // 临时停车区单车道偏移
     int laybyMoment = 110;
     int laybyStopTime = 200;
 
-        int cateringTurningTime = 50; // 转弯时间 25帧
+    int cateringTurningTime = 50; // 转弯时间 25帧
     int cateringTravelTime = 10; // 行驶时间 10帧 在斜线路段的行驶时间
     int cateringStopTime = 100; // 停车时间
     bool bridge = true;         // 坡道区使能
@@ -111,9 +113,10 @@ public:
         NormD, alpha, ringSum, ringEnter0, ringP0, ringD0, ringEnter1, ringP1,
         ringD1, ringEnter2, ringP2, ringD2, ringEnter3, ringP3, ringD3,
         aim_distance, track_startline, pl, ph, debug, saveImg, rowCutUp,
-        rowCutBottom, laybyCurtailOffset, laybyMoment, laybyStopTime, cateringTurningTime,
-        cateringTravelTime, cateringStopTime, bridge, catering, layby, obstacle,
-        parking, ring, cross, stop, score, model,
+        rowCutBottom, parkingStopTime, parkingTurningTime, laybyCurtailOffset,
+        laybyMoment, laybyStopTime, cateringTurningTime, cateringTravelTime,
+        cateringStopTime, bridge, catering, layby, obstacle, parking, ring,
+        cross, stop, score, model,
         video); // 添加构造函数
   };
 

@@ -219,31 +219,22 @@ int factorial(int x) {
 }
 
 // 由两点生成离散直线
-std::vector<POINT> points2line(POINT a, POINT b) {
-  std::vector<POINT> output;
-  int dx = abs(b.x - a.x);
-  int dy = abs(b.y - a.y);
-  int sx = a.x < b.x ? 1 : -1;
-  int sy = a.y < b.y ? 1 : -1;
-  int err = dx - dy;
+std::vector<POINT> points2line(POINT a, POINT b, int dist) {
+  std::vector<POINT> result;
+  double dx = b.x - a.x;
+  double dy = b.y - a.y;
+  double dn = sqrt(dx * dx + dy * dy);
 
-  while (true) {
-    output.push_back(a);
-    if (a.x == b.x && a.y == b.y)
-      break;
-    int e2 = err * 2;
-    if (e2 > -dy) {
-      err -= dy;
-      a.x += sx;
-    }
-    if (e2 < dx) {
-      err += dx;
-      a.y += sy;
-    }
+  int steps = static_cast<int>(std::ceil(dn / dist));
+
+  for (int i = 0; i <= steps; i++) {
+    POINT p;
+    p.x = a.x + dx * (i / static_cast<double>(steps));
+    p.y = a.y + dy * (i / static_cast<double>(steps));
+    result.push_back(p);
   }
-  return output;
+  return result;
 }
-
 
 /**
  * @brief 贝塞尔曲线

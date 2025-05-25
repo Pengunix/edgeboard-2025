@@ -27,9 +27,9 @@ int main(int argc, char const *argv[]) {
                     motion.params.cateringTurningTime,
                     motion.params.cateringStopTime);
   Obstacle obstacle;
-  Layby layby(motion.params.laybyMoment,
-               motion.params.laybyStopTime);
-  Parking parking;
+  Layby layby(motion.params.laybyMoment, motion.params.laybyStopTime);
+  Parking parking(motion.params.parkingTurningTime,
+                  motion.params.parkingStopTime);
   StopArea stopArea;
   ControlCenter ctrlCenter;
 
@@ -177,7 +177,7 @@ int main(int argc, char const *argv[]) {
 
     //[07] 临时停车区检测
     if ((scene == Scene::NormalScene || scene == Scene::LaybyScene) &&
-        motion.params.catering) {
+        motion.params.layby) {
       if (layby.process(tracking, imgBinary, detection->results,
                         motion.params.laybyCurtailOffset))
         scene = Scene::LaybyScene;

@@ -41,18 +41,18 @@ link_directories(${ONNX_LIBRARY_DIRS})
 #---------------------------------------------------------------------
 add_subdirectory(${PROJECT_SOURCE_DIR}/spdlog)
 
-# set(TEST_NAME Track)
-# add_executable(${TEST_NAME} ${PROJECT_SOURCE_DIR}/tests/track.cpp)
-# target_precompile_headers(${TEST_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/include/json.hpp ${PROJECT_SOURCE_DIR}/include/controlcenter.hpp)
-# target_link_libraries(
-#         ${TEST_NAME}
-#         ${PPNC_LIBRARIES}
-#         ${ONNX_LIBRARIES}
-#         ${OpenCV_LIBS}
-#         ${SERIAL_LIBRARIES}
-#         spdlog::spdlog
-#         pthread
-# )
+set(TEST_NAME IPM)
+add_executable(${TEST_NAME} ${PROJECT_SOURCE_DIR}/tests/ipm.cpp)
+target_precompile_headers(${TEST_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/include/json.hpp ${PROJECT_SOURCE_DIR}/include/controlcenter.hpp)
+target_link_libraries(
+        ${TEST_NAME}
+        ${PPNC_LIBRARIES}
+        ${ONNX_LIBRARIES}
+        ${OpenCV_LIBS}
+        ${SERIAL_LIBRARIES}
+        spdlog::spdlog
+        pthread
+)
 
 add_executable(${CMAKE_PROJECT_NAME} ${PROJECT_SOURCE_DIR}/src/main.cpp)
 target_precompile_headers(${CMAKE_PROJECT_NAME} PUBLIC

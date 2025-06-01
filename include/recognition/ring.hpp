@@ -27,7 +27,6 @@ public:
   RingType ringType = RingType::RingLeft; // 环岛类型
   uint8_t ringNum = 0;
   // uint16_t counterShield = 0; // 环岛检测屏蔽计数器：屏蔽车库误检测
-  // 一定是环岛
   bool R100 = false;
 
   /**
@@ -163,8 +162,8 @@ public:
           }
         }
 
-        //       printf("%d %d %d %d %d\n",right_cnt,
-        //       right_state,right_cnt,left_sum,right_edge );
+              // printf("%d %d %d %d %d\n",right_cnt,
+              // right_state,right_cnt,left_sum,right_edge );
         // params[0]=right_state;params[1]=right_cnt;params[2]=left_sum;params[3]=right_edge;
         if (left_sum > 60 &&
             ((cnt[0] > 5 && cnt[0] < 20 && cnt[1] > 10 && cnt[1] < 45 &&

@@ -15,7 +15,10 @@
 #include "recognition/tracking.hpp"
 #include "uart.hpp"
 using namespace std::literals;
-
+/*
+  1. 逆透视矩阵重测
+  2. 路宽数组重测
+*/
 int main(int argc, char const *argv[]) {
   Preprocess preprocess;                 // 图像预处理类
   Motion motion("./config/config.json"); // 运动控制类
@@ -144,10 +147,21 @@ int main(int argc, char const *argv[]) {
     // 图像底部切行（盲区距离）
     tracking.trackRecognition(imgBinary);
 
+    // std::ofstream outFile("./config/roadwidth.txt");
+    // if (!outFile.is_open()) {
+    //   spdlog::critical("Failed to Open roadwidth file");
+    //   return -1;
+    // }
+    // for (int row = 0; row < tracking.pointsEdgeLeft.size(); ++row) {
+    //   int x = tracking.pointsEdgeRight[row].y - tracking.pointsEdgeLeft[row].y;
+    //   outFile << x << std::endl;
+    // }
+    // outFile.close();
+
     if (motion.params.debug) {
       cv::Mat imgTrack = img.clone();
       // 图像绘制赛道识别结果
-      tracking.drawImage(imgTrack);
+      // tracking.drawImage(imgTrack);
       // display.setNewWindow(2, "Track", imgTrack);
       cv::imshow("Track", imgTrack);
     }
@@ -210,7 +224,7 @@ int main(int argc, char const *argv[]) {
         motion.params.obstacle) {
       if (obstacle.process(tracking, detection->results)) {
         uart->buzzer = BUZZER_WARNNING;
-        obstacle.drawImage(img);
+        // obstacle.drawImage(img);
         scene = Scene::ObstacleScene;
       } else
         scene = Scene::NormalScene;
@@ -224,6 +238,7 @@ int main(int argc, char const *argv[]) {
           motion.params.ringEnter2, motion.params.ringEnter3};
       if (ring.ringRecognition(tracking, motion.params.ringSum, ringEnter,
                                roadwidth)) {
+        ring.drawimg(img);
         scene = Scene::RingScene;
       } else {
         scene = Scene::NormalScene;
@@ -311,11 +326,11 @@ int main(int argc, char const *argv[]) {
         if (ring.ringNum == 0) {
           P = motion.params.ringP0;
           D = motion.params.ringD0;
-        } // R60
+        }
         else if (ring.ringNum == 1) {
           P = motion.params.ringP1;
           D = motion.params.ringD1;
-        } // R50
+        } 
       }
     }
     motion.poseCtrl(ctrlCenter, scene, P, D, motion.params.pd_P,
@@ -329,15 +344,20 @@ int main(int argc, char const *argv[]) {
       auto startTime = std::chrono::duration_cast<std::chrono::milliseconds>(
                            std::chrono::system_clock::now().time_since_epoch())
                            .count();
-      detection->drawBox(img);
-      ctrlCenter.drawImage(tracking, scene, img);
-
-      putText(img,
-              formatDouble2String(1000.0 / (startTime - preTime), 1) + "FPS",
-              cv::Point(COLSIMAGE - 70, 80), cv::FONT_HERSHEY_PLAIN, 1,
-              cv::Scalar(0, 0, 255), 1);
-
       if (motion.params.debug) {
+        detection->drawBox(img);
+        ctrlCenter.drawImage(tracking, scene, img);
+
+        putText(img,
+                formatDouble2String(1000.0 / (startTime - preTime), 1) + "FPS",
+                cv::Point(COLSIMAGE - 75, 80), cv::FONT_HERSHEY_PLAIN, 1,
+                cv::Scalar(0, 0, 255), 1);
+
+        putText(img,
+                "P:" + formatDouble2String(P, 1) +
+                    " D:" + formatDouble2String(D, 1),
+                cv::Point(COLSIMAGE - 98, 95), cv::FONT_HERSHEY_PLAIN, 1,
+                cv::Scalar(0, 0, 255), 1);
         cv::imshow("aa", img);
         cv::waitKey(1);
       }

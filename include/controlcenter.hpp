@@ -37,11 +37,10 @@ public:
     std::vector<POINT> v_center(4);
     style = "STRIGHT";
     int premode = 0;
-
+    // 关闭充电停车区逆透视 scene == Scene::ParkingScene ||
     if (scene == Scene::NormalScene || scene == Scene::CrossScene ||
-        scene == Scene::ParkingScene || scene == Scene::RingScene ||
-        scene == Scene::LaybyScene || scene == Scene::BridgeScene ||
-        scene == Scene::CateringScene) {
+        scene == Scene::RingScene || scene == Scene::LaybyScene ||
+        scene == Scene::BridgeScene || scene == Scene::CateringScene) {
 #if BOUNDARY_SHOW
       // 逆透视图像
       cv::Mat only_boundary =
@@ -182,8 +181,8 @@ public:
       centerEdge[begin_id].x = car.x;
       centerEdge[begin_id].y = car.y;
       centerEdge = resample_points(
-          std::vector<POINT>(centerEdge.begin() + begin_id,
-          centerEdge.end()), using_resample_dist * pixel_per_meter);
+          std::vector<POINT>(centerEdge.begin() + begin_id, centerEdge.end()),
+          using_resample_dist * pixel_per_meter);
       // //中线下采样
       centerEdge1 =
           track_rightline(transformedPoints_Right, 5, 0.225 * pixel_per_meter);
@@ -192,8 +191,8 @@ public:
 
       // std::cout << "begin id" << begin_id << std::endl;
       centerEdge1 = resample_points(
-          std::vector<POINT>(centerEdge1.begin() + begin_id,
-          centerEdge1.end()), using_resample_dist * pixel_per_meter);
+          std::vector<POINT>(centerEdge1.begin() + begin_id, centerEdge1.end()),
+          using_resample_dist * pixel_per_meter);
 
       std::vector<cv::Point2f> pointsToTransform_center =
           convertPointsToCvPoints(centerEdge); // 中线转为cvpoint
@@ -352,33 +351,29 @@ public:
     }
 
     // 绘制中心点集
-    for (int i = 0; i < centerEdge.size(); i++) {
-      if (!centerEdge_show.empty()) {
-        if (centerEdge_show[i].x >= 0 && centerEdge_show[i].x < ROWSIMAGE &&
-            centerEdge_show[i].y >= 0 && centerEdge_show[i].y < COLSIMAGE) {
-          if (i == aim_idx) {
-            circle(centerImage,
-                   cv::Point(centerEdge_show[i].y, centerEdge_show[i].x), 3,
-                   cv::Scalar(0, 0, 0), -1);
-          } else {
-            circle(centerImage,
-                   cv::Point(centerEdge_show[i].y, centerEdge_show[i].x), 1,
-                   cv::Scalar(255, 255, 255), -1);
-          }
+    for (int i = 0; i < centerEdge_show.size(); i++) {
+      if (centerEdge_show[i].x >= 0 && centerEdge_show[i].x < ROWSIMAGE &&
+          centerEdge_show[i].y >= 0 && centerEdge_show[i].y < COLSIMAGE) {
+        if (i == aim_idx) {
+          circle(centerImage,
+                 cv::Point(centerEdge_show[i].y, centerEdge_show[i].x), 3,
+                 cv::Scalar(0, 0, 0), -1);
+        } else {
+          circle(centerImage,
+                 cv::Point(centerEdge_show[i].y, centerEdge_show[i].x), 1,
+                 cv::Scalar(255, 255, 255), -1);
         }
       }
-      if (!centerEdge_show1.empty()) {
-        if (centerEdge_show1[i].x >= 0 && centerEdge_show1[i].x < ROWSIMAGE &&
-            centerEdge_show1[i].y >= 0 && centerEdge_show1[i].y < COLSIMAGE) {
-          if (i == aim_idx) {
-            circle(centerImage,
-                   cv::Point(centerEdge_show1[i].y, centerEdge_show1[i].x), 3,
-                   cv::Scalar(128, 0, 255), -1);
-          } else {
-            circle(centerImage,
-                   cv::Point(centerEdge_show1[i].y, centerEdge_show1[i].x), 1,
-                   cv::Scalar(255, 128, 255), -1);
-          }
+      if (centerEdge_show1[i].x >= 0 && centerEdge_show1[i].x < ROWSIMAGE &&
+          centerEdge_show1[i].y >= 0 && centerEdge_show1[i].y < COLSIMAGE) {
+        if (i == aim_idx) {
+          circle(centerImage,
+                 cv::Point(centerEdge_show1[i].y, centerEdge_show1[i].x), 3,
+                 cv::Scalar(128, 0, 255), -1);
+        } else {
+          circle(centerImage,
+                 cv::Point(centerEdge_show1[i].y, centerEdge_show1[i].x), 1,
+                 cv::Scalar(255, 128, 255), -1);
         }
       }
     }

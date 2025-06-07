@@ -159,7 +159,7 @@ public:
     pd_errorLast = pd_error;
 
     servoPwm =
-        (uint16_t)(PWMSERVOMID + 0.5 * pwmDiff + 0.5 * pd_pwmDiff); // PWM转换
+        (uint16_t)(PWMSERVOMID + params.alpha * pwmDiff + (1-params.alpha) * pd_pwmDiff); // PWM转换
     // 舵机限幅
     if (servoPwm > PWMSERVOMAX) {
       servoPwm = PWMSERVOMAX;

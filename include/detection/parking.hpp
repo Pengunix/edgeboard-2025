@@ -73,7 +73,7 @@ public:
       batteryY = ROWSIMAGE; // 充电站标识高度
 
       for (size_t i = 0; i < predict.size(); i++) {
-        if (predict[i].type == LABEL_CAR && predict[i].score > 0.6) {
+        if (predict[i].type == LABEL_CAR && predict[i].score > 0.7) {
           carY = (predict[i].y + predict[i].height) / 2; // 计算智能车的中心高度
         } else if ((predict[i].type == LABEL_BATTERY) &&
                    predict[i].score > 0.6) {
@@ -104,7 +104,7 @@ public:
     {
       // 右侧车库 从中间开始找赛道边缘的跳变点 作为最近的第一条横线中的点
       for (int i = 10; i < track.pointsEdgeRight.size(); i++) {
-        // 跳变点增加约束，这里去了平均值，将各个跳变点约束在相应直线附近
+        // 跳变点增加约束，这里曲了平均值，将各个跳变点约束在相应直线附近
         if (track.pointsEdgeRight[i].y - track.pointsEdgeRight[i - 1].y > 20) {
           // track.pointsEdgeRight[i-2].y - track.pointsEdgeRight[i+2].y > 20) {
           splitpointdown[1].x = track.pointsEdgeRight[i - 5].x;
@@ -127,7 +127,7 @@ public:
           for (int k = 0; k < 5; k++) {
             sum += track.pointsEdgeRight[i + k].y;
           }
-          splitpointup[0].y = sum / 6;
+          splitpointup[0].y = sum / 5;
 
           splitpointup[1].x = track.pointsEdgeRight[i - 5].x;
           sum = 0;

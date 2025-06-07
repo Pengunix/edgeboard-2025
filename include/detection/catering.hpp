@@ -16,8 +16,12 @@ public:
     if (cateringEnable) {
       if (!stopEnable && turning) {
         for (size_t i = 0; i < predict.size(); i++) {
-          if (predict[i].type == LABEL_BURGER) {
-            burgerY = predict[i].y; // 计算汉堡最高高度
+          if (predict[i].type == LABEL_BURGER && predict[i].score > 0.75) {
+            spdlog::info("enable and found");
+            burgerFound = true; // 发现汉堡标志
+            break;
+          } else {
+            burgerFound = false; // 未发现汉堡标志
           }
         }
       }
@@ -35,20 +39,29 @@ public:
         stopEnable = true;                                    // 停车使能
       else if (counterSession > turningTime)                  // 进入岔路
         turning = false; // 关闭转向标志
+      if ((burgerFound && burgerLeft && track.stdevRight > 100) ||
+          (burgerFound && !burgerLeft && track.stdevLeft > 100)) {
+        return true;
+      } else {
+        return false;
+      }
 
-      return true;
     } else {
       for (size_t i = 0; i < predict.size(); i++) {
         if (predict[i].type == LABEL_BURGER && predict[i].score > 0.75 &&
             (predict[i].y + predict[i].height) > ROWSIMAGE * 0.3) {
           counterRec++;
           noRing = true;
+          burgerFound = true; // 发现汉堡标志
           if (predict[i].x < COLSIMAGE / 2) {
             burgerLeft = true;
+            spdlog::info("found");
           } else {
             burgerLeft = false;
           }
           break;
+        } else {
+          burgerFound = false; // 未发现汉堡标志
         }
       }
 
@@ -58,9 +71,8 @@ public:
           counterRec = 0;
           counterSession = 0;
           cateringEnable = true; // 检测到汉堡标志
-          // TODO(me) : 若汉堡误判率过大，增加边线跳变约束
-          if ((burgerLeft && track.stdevRight > 100) ||
-              !burgerLeft && track.stdevLeft > 100) {
+          if ((burgerFound && burgerLeft && track.stdevRight > 100) ||
+              (burgerFound && !burgerLeft && track.stdevLeft > 100)) {
             return true;
           } else {
             return false;
@@ -103,7 +115,7 @@ private:
   uint16_t counterRec = 0;     // 汉堡标志检测计数器
   bool cateringEnable = false; // 岔路区域使能标志
   bool turning = true;         // 转向标志
-  int burgerY = 0;             // 汉堡高度
+  bool burgerFound = false;    // 汉堡检测标志
   int turningTime = 50;        // 转弯时间 25帧
   int travelTime = 10; // 行驶时间 10帧 在斜线路段的行驶时间
   int stopTime = 100;  // 停车时间 25帧

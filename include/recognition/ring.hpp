@@ -107,6 +107,7 @@ public:
           if ((cnt[0] > 5 && cnt[0] < 20 && cnt[1] > 10 && cnt[1] < 45 &&
                cnt[2] > 0 && track.stdevLeft < 70)) {
             R100 = true;
+            spdlog::info("R100!");
           } else {
             R100 = false;
           }
@@ -161,10 +162,6 @@ public:
             }
           }
         }
-
-              // printf("%d %d %d %d %d\n",right_cnt,
-              // right_state,right_cnt,left_sum,right_edge );
-        // params[0]=right_state;params[1]=right_cnt;params[2]=left_sum;params[3]=right_edge;
         if (left_sum > 60 &&
             ((cnt[0] > 5 && cnt[0] < 20 && cnt[1] > 10 && cnt[1] < 45 &&
               cnt[2] > 0 && track.stdevRight < 70) ||
@@ -278,7 +275,8 @@ public:
     else if (ringStep == RingStep::Waiting) {
       spdlog::info("环岛 Waiting");
       if (ringType == RingType::RingLeft) {
-        if (track.stdevRight > 15) {
+        // 这里改过, 20
+        if (track.stdevRight > 50) {
           ringStep = RingStep::None;
           return false;
         }
@@ -295,11 +293,11 @@ public:
             search = false;
           if (search && track.pointsEdgeLeft[i].x < 85 &&
               track.pointsEdgeLeft[i].y < 3) {
-            // TODO(me): 这里的点是从上往下找的，可能会有问题，若环岛前方右弯道会无法进环岛
             endpoint = track.pointsEdgeLeft[i];
             whitecnt++;
           }
         }
+        _ringPoint = endpoint;
         spdlog::info("endpoint x {}, y {}", endpoint.x, endpoint.y);
 
         if (!search && endpoint.x > ringEnter[ringNum]) {
@@ -314,7 +312,7 @@ public:
           }
         }
       } else if (ringType == RingType::RingRight) {
-        if (track.stdevLeft > 15) {
+        if (track.stdevLeft > 20) {
           ringStep = RingStep::None;
           return false;
         }
@@ -336,7 +334,8 @@ public:
             whitecnt++;
           }
         }
-
+        _ringPoint = endpoint;
+        spdlog::info("endpoint x {}, y {}", endpoint.x, endpoint.y);
         if (!search && endpoint.x > ringEnter[ringNum]) {
           ringStep = RingStep::Entering;
           EnteringCounter = 0;
@@ -355,10 +354,14 @@ public:
         //     EnteringCounter ++;  //入环计数器
         //   printf("%d %d\n", track.pointsEdgeRight.size(),
         //   track.pointsEdgeRight[10].y);
+        // TODO(me) 这里环岛结束补线太过激进
+        /* || track.pointsEdgeRight.size() < 140*/
+        /*|| EnteringCounter > 40*/
+
+        // 这里改过
+        spdlog::info("30: {}", track.pointsEdgeRight[30].y);
         if ((track.pointsEdgeRight.size() < 180 &&
-             track.pointsEdgeRight[10].y <
-                 COLSIMAGE - 20) /* || track.pointsEdgeRight.size() < 140*/
-            /*|| EnteringCounter > 40*/) {
+             track.pointsEdgeRight[10].y < COLSIMAGE - 20 && track.pointsEdgeRight[30].y < COLSIMAGE - 70 && track.stdevRight > 100)) {
           ringStep = RingStep::Inside;
         }
 
@@ -610,19 +613,34 @@ public:
       return false;
     } else {
       // spdlog::info("环岛 边线点集长度 left {}, right {}",
-                  //  track.pointsEdgeLeft.size(), track.pointsEdgeRight.size());
+      //  track.pointsEdgeLeft.size(), track.pointsEdgeRight.size());
       return true;
     }
+  }
+
+  void drawimg(cv::Mat &image) {
+    if (ringStep == RingStep::None) {
+      return;
+    }
+    cv::circle(image, cv::Point(_ringPoint.y, _ringPoint.x), 5,
+               cv::Scalar(0, 0, 255), -1);
+    cv::putText(image, "Ring Step: " + std::to_string(ringStep),
+                cv::Point(10, 30), cv::FONT_HERSHEY_SIMPLEX, 0.5,
+                cv::Scalar(0, 255, 0), 1);
+    cv::putText(image, "Ring Type: " + std::to_string(ringType),
+                cv::Point(10, 50), cv::FONT_HERSHEY_SIMPLEX, 0.5,
+                cv::Scalar(0, 255, 0), 1);
+    cv::putText(image, "Ring Num: " + std::to_string(ringNum),
+                cv::Point(10, 70), cv::FONT_HERSHEY_SIMPLEX, 0.5,
+                cv::Scalar(0, 255, 0), 1);
+    // spdlog::info("环岛 边线点集长度 left {}, right {}",
+    // track.pointsEdgeLeft.size(), track.pointsEdgeRight.size());
   }
 
 private:
   float distance = 0;
   // uint16_t counterSpurroad = 0; // 岔路计数器
   // 临时测试用参数
-  int _ringStep;
-  int _ringEnable;
-  int _tmp_ttttt;
-  int _index = 0;
   POINT _ringPoint = POINT(0, 0);
 
   /**

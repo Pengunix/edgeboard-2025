@@ -10,14 +10,14 @@ public:
   bool stopEnable = false; // 停车使能标志
 
   bool process(Tracking &track, cv::Mat &image,
-               std::vector<PredictResult> predict, int curtailoffset) {
+               std::vector<PredictResult> predict,
+               const std::vector<int> &RoadWidth) {
     if (laybyEnable) // 进入临时停车状态
     {
       cv::Mat edges;
       cv::Mat blurred;
-
-      curtailTracking(track, leftEnable,
-                      curtailoffset); // 缩减优化车道线（双车道→单车道）
+      // 缩减优化车道线（双车道→单车道）
+      curtailTracking(track, leftEnable, RoadWidth);
       // 直线检测
       // 优化检测，现在的问题是当前赛道没有停车区，而识别到了其他赛道的标牌，造成误判
       GaussianBlur(image, blurred, cv::Size(3, 3), 0); // 添加高斯模糊预处理
@@ -182,27 +182,25 @@ public:
    * @param track
    * @param left
    */
-  // TODO(me) offset参数json序列化
-  void curtailTracking(Tracking &track, bool left, int offset = 50) {
-    if (left) // 向左侧缩进
-    {
+  void curtailTracking(Tracking &track, bool left,
+                       const std::vector<int> &RoadWidth) {
+    // 向左侧缩进
+    if (left) {
       if (track.pointsEdgeRight.size() > track.pointsEdgeLeft.size())
         track.pointsEdgeRight.resize(track.pointsEdgeLeft.size());
 
-      for (size_t i = 0; i < track.pointsEdgeRight.size(); i++) {
+      for (int i = 0; i < track.pointsEdgeRight.size(); i++) {
         track.pointsEdgeRight[i].y =
-            ((track.pointsEdgeRight[i].y + track.pointsEdgeLeft[i].y) / 2) +
-            offset;
+            track.pointsEdgeLeft[i].y + RoadWidth[i] / 2;
       }
-    } else // 向右侧缩进
-    {
+      // 向右侧缩进
+    } else {
       if (track.pointsEdgeRight.size() < track.pointsEdgeLeft.size())
         track.pointsEdgeLeft.resize(track.pointsEdgeRight.size());
 
-      for (size_t i = 0; i < track.pointsEdgeLeft.size(); i++) {
+      for (int i = 0; i < track.pointsEdgeLeft.size(); i++) {
         track.pointsEdgeLeft[i].y =
-            ((track.pointsEdgeRight[i].y + track.pointsEdgeLeft[i].y) / 2) -
-            offset;
+            track.pointsEdgeRight[i].y - RoadWidth[i] / 2;
       }
     }
   }

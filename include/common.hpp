@@ -322,21 +322,25 @@ convertCvPointsToPoints(const std::vector<cv::Point2f> &cvPoints) {
     POINT p(0, 0);
     p.y = static_cast<int>(cvPoints[i].x);
     p.x = static_cast<int>(cvPoints[i].y);
+    // 这里逆透视的点可能为负数，在这里截断一下否则resample会很长
+    if (p.y < 0)
+      p.y = 0;
+    if (p.x < 0)
+      p.x = 0;
     edge.push_back(p);
   }
   return edge;
 } // Point2f to POINT
 
 cv::Mat auto_init_ipm_mat() {
-  int offsety = 20;
+  int offsety = 0;
   std::vector<cv::Point2f> srcPoints = {
-      cv::Point2f(105, 75), cv::Point2f(227, 75), cv::Point2f(60, 150),
-      cv::Point2f(270, 150)};
+      cv::Point2f(113, 61), cv::Point2f(233, 61), cv::Point2f(71, 130),
+      cv::Point2f(273, 136)};
   std::vector<cv::Point2f> dstPoints = {
       cv::Point2f(130, 120 + offsety), cv::Point2f(190, 120 + offsety),
       cv::Point2f(130, 180 + offsety), cv::Point2f(190, 180 + offsety)};
-  cv::Mat M = cv::getPerspectiveTransform(
-      srcPoints, dstPoints);
+  cv::Mat M = cv::getPerspectiveTransform(srcPoints, dstPoints);
 
   return M;
 }
@@ -475,51 +479,4 @@ std::vector<POINT> track_rightline(std::vector<POINT> edge_in, int approx_num,
   }
 
   return edge_out;
-}
-
-cv::Mat draw_boundary_ipm(std::vector<POINT> left_edge,
-                          std::vector<POINT> right_edge, cv::Mat invMat) {
-  // cout << "左边线:" << left_edge.real_size;
-  left_edge = blur_points(left_edge, using_kernel_num);
-  right_edge = blur_points(right_edge, using_kernel_num);
-  left_edge = resample_points(left_edge, using_resample_dist);
-  right_edge = resample_points(right_edge, using_resample_dist);
-  std::vector<cv::Point2f> pointsToTransform_left =
-                               convertPointsToCvPoints(left_edge),
-                           pointsToTransform_right =
-                               convertPointsToCvPoints(right_edge),
-                           transformedPoints;
-
-  cv::Size imageSize(320, 240);
-  cv::Mat only_boundary = cv::Mat::zeros(imageSize, CV_8UC1);
-  // invcv::Mat_auto=invcv::Mat_auto.inv();
-  cv::perspectiveTransform(pointsToTransform_left, transformedPoints, invMat);
-  for (size_t i = 0; i < transformedPoints.size(); i++) {
-    cv::circle(only_boundary, transformedPoints[i], 0,
-               cv::Scalar(255, 255, 255), 2);
-  }
-  left_edge = convertCvPointsToPoints(transformedPoints);
-
-  cv::perspectiveTransform(pointsToTransform_right, transformedPoints, invMat);
-  for (size_t i = 0; i < transformedPoints.size(); i++) {
-    cv::circle(only_boundary, transformedPoints[i], 0,
-               cv::Scalar(255, 255, 255), 2);
-  }
-
-  std::vector<POINT> center_line = track_leftline(left_edge, 5, 27);
-  Angle angle_pts = get_angle(center_line, 10);
-  std::vector<cv::Point2f> pointsToTransform_center =
-      convertPointsToCvPoints(center_line);
-  // perspectiveTransform(pointsToTransform_center, transformedPoints,
-  // invcv::Mat);
-  for (size_t i = 0; i < pointsToTransform_center.size(); i++) {
-    cv::circle(only_boundary, pointsToTransform_center[i], 0,
-               cv::Scalar(255, 255, 255), 2);
-    // imshow("11", only_boundary);
-    // cout << angle_pts.angle[i] << endl;
-    // waitKey(500);
-  }
-  // imshow("仅边界", only_boundary);
-
-  return only_boundary;
 }

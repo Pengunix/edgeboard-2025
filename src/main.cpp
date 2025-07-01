@@ -19,6 +19,8 @@ using namespace std::literals;
   1. 逆透视矩阵重测
   2. 路宽数组重测
 */
+long preTime, frameTime = 0;
+
 int main(int argc, char const *argv[]) {
   Preprocess preprocess;                 // 图像预处理类
   Motion motion("./config/config.json"); // 运动控制类
@@ -53,7 +55,7 @@ int main(int argc, char const *argv[]) {
   int countInit = 0;
   // AI异步推理
   std::shared_ptr<Detection> detection =
-      std::make_shared<Detection>(motion.params.model);
+      std::make_shared<Detection>("./model/yolov3_mobilenet_v1");
   detection->score = motion.params.score;
   std::future<void> future;
   std::vector<PredictResult> AIresults;
@@ -97,7 +99,7 @@ int main(int argc, char const *argv[]) {
   // 初始化参数
   Scene scene = Scene::NormalScene;
   Scene sceneLast = Scene::NormalScene;
-  long preTime;
+
   cv::Mat img;
 
   while (1) {
@@ -113,7 +115,7 @@ int main(int argc, char const *argv[]) {
     // [02] 图像预处理
     cv::Mat imgBinary = preprocess.binaryzation(img);
 
-    //[03] 启动AI推理
+    // [03] 启动AI推理
     cv::Mat AIimg = img.clone();
     if (!future.valid() &&
         (scene == Scene::NormalScene || scene == Scene::CrossScene ||
@@ -140,7 +142,7 @@ int main(int argc, char const *argv[]) {
       AIFlag = false;
     }
 
-    //[04] 赛道识别
+    // [04] 赛道识别
     // 图像顶部切行（前瞻距离）
     tracking.rowCutUp = motion.params.rowCutUp;
     tracking.rowCutBottom = motion.params.rowCutBottom;
@@ -153,20 +155,20 @@ int main(int argc, char const *argv[]) {
     //   return -1;
     // }
     // for (int row = 0; row < tracking.pointsEdgeLeft.size(); ++row) {
-    //   int x = tracking.pointsEdgeRight[row].y - tracking.pointsEdgeLeft[row].y;
-    //   outFile << x << std::endl;
+    //   int x = tracking.pointsEdgeRight[row].y -
+    //   tracking.pointsEdgeLeft[row].y; outFile << x << std::endl;
     // }
     // outFile.close();
 
     if (motion.params.debug) {
-      cv::Mat imgTrack = img.clone();
+      // cv::Mat imgTrack = img.clone();
       // 图像绘制赛道识别结果
       // tracking.drawImage(imgTrack);
       // display.setNewWindow(2, "Track", imgTrack);
-      cv::imshow("Track", imgTrack);
+      // cv::imshow("Track", imgTrack);
     }
 
-    //[05] 停车区检测
+    // [05] 停车区检测
     if (motion.params.stop) {
       if (stopArea.process(detection->results)) {
         scene = Scene::StopScene;
@@ -180,7 +182,7 @@ int main(int argc, char const *argv[]) {
       }
     }
 
-    //[06] 快餐店检测
+    // [06] 快餐店检测
     if ((scene == Scene::NormalScene || scene == Scene::CateringScene) &&
         motion.params.catering) {
       if (catering.process(tracking, imgBinary, detection->results)) {
@@ -189,48 +191,52 @@ int main(int argc, char const *argv[]) {
         scene = Scene::NormalScene;
     }
 
-    //[07] 临时停车区检测
+    // [07] 临时停车区检测
     if ((scene == Scene::NormalScene || scene == Scene::LaybyScene) &&
         motion.params.layby) {
-      if (layby.process(tracking, imgBinary, detection->results,
-                        motion.params.laybyCurtailOffset))
+      if (layby.process(tracking, imgBinary, detection->results, roadwidth))
         scene = Scene::LaybyScene;
       else
         scene = Scene::NormalScene;
     }
 
-    //[08] 充电停车场检测
+    // [08] 充电停车场检测
     if ((scene == Scene::NormalScene || scene == Scene::ParkingScene) &&
         motion.params.parking) {
       if (parking.process(tracking, imgBinary, detection->results)) {
         scene = Scene::ParkingScene;
-        parking.drawImage(tracking, img);
+        // parking.drawImage(tracking, img);
       } else {
         scene = Scene::NormalScene;
       }
     }
 
-    //[09] 坡道区检测
+    // [09] 坡道区检测
     if ((scene == Scene::NormalScene || scene == Scene::BridgeScene) &&
         motion.params.bridge) {
-      if (bridge.process(tracking, detection->results))
+      if (bridge.process(tracking, detection->results)) {
+        // if (bridge.process(tracking, frameTime, motion.speed, roadwidth,
+        //  ctrlCenter.left_num, ctrlCenter.right_num)) {
         scene = Scene::BridgeScene;
-      else
+      } else {
         scene = Scene::NormalScene;
+      }
     }
 
     // [10] 障碍区检测
     if ((scene == Scene::NormalScene || scene == Scene::ObstacleScene) &&
         motion.params.obstacle) {
-      if (obstacle.process(tracking, detection->results)) {
-        uart->buzzer = BUZZER_WARNNING;
-        // obstacle.drawImage(img);
+      if (obstacle.process(img, tracking, detection->results, frameTime, motion.speed, 20,
+                           roadwidth, motion.params.Obstacle_upscale,
+                           motion.params.Obstacle_block_scale,
+                           motion.params.Obstacle_distance_block, 0)) {
+        obstacle.drawImage(img);
         scene = Scene::ObstacleScene;
       } else
         scene = Scene::NormalScene;
     }
 
-    //[11] 环岛识别与路径规划
+    // [11] 环岛识别与路径规划
     if ((scene == Scene::NormalScene || scene == Scene::RingScene) &&
         motion.params.ring) {
       uint8_t ringEnter[10] = {
@@ -244,7 +250,7 @@ int main(int argc, char const *argv[]) {
         scene = Scene::NormalScene;
       }
     }
-    //[12] 十字道路识别与路径规划
+    // [12] 十字道路识别与路径规划
     if ((scene == Scene::NormalScene || scene == Scene::CrossScene) &&
         motion.params.cross) {
       if (crossroad.crossRecognition(tracking))
@@ -252,11 +258,11 @@ int main(int argc, char const *argv[]) {
       else
         scene = Scene::NormalScene;
     }
-    //[13] 车辆控制中心拟合
+    // [13] 车辆控制中心拟合
     ctrlCenter.fitting(tracking, scene, motion.params.aim_distance,
                        motion.params.track_startline, ring.ringStep, ring.R100,
                        ring.ringType, catering.burgerLeft);
-
+    // [14] 出赛道检测
     if (scene != Scene::ParkingScene) {
       if (ctrlCenter.derailmentCheck(tracking)) {
         uart->carControl(0, PWMSERVOMID);
@@ -266,7 +272,7 @@ int main(int argc, char const *argv[]) {
       }
     }
 
-    //[14] 运动控制(速度+方向)
+    // [15] 运动控制(速度+方向)
     // 去除调试模式判断
     if (countInit > 30) {
       // 触发停车
@@ -301,9 +307,9 @@ int main(int argc, char const *argv[]) {
     }
 
     // 舵机动态PD控制
-    float P, D;
+    float P = 0, D = 0;
     if (scene == Scene::NormalScene || scene == Scene::CrossScene ||
-        scene == Scene::ParkingScene || scene == Scene::BridgeScene) {
+        scene == Scene::ParkingScene || scene == Scene::BridgeScene ) {
 
       P = motion.params.pl * motion.pure_angle * motion.pure_angle / 50 +
           motion.params.ph;
@@ -326,38 +332,56 @@ int main(int argc, char const *argv[]) {
         if (ring.ringNum == 0) {
           P = motion.params.ringP0;
           D = motion.params.ringD0;
-        }
-        else if (ring.ringNum == 1) {
+        } else if (ring.ringNum == 1) {
           P = motion.params.ringP1;
           D = motion.params.ringD1;
-        } 
+        }
       }
+    } else if (scene == Scene::ObstacleScene) {
+      if (obstacle.step == Obstacle::Step::Start && obstacle.first == 0) {
+        P = motion.params.Obstacle_Start_P;
+        D = motion.params.Obstacle_Start_D;
+      } else if (obstacle.step == Obstacle::Step::Start ||
+                 obstacle.step == Obstacle::Step::Inside) {
+        P = motion.params.Obstacle_P1;
+        D = motion.params.Obstacle_D1;
+      } else {
+        P = motion.params.Obstacle_P2;
+        D = motion.params.Obstacle_D2;
+      }
+    } else if (scene == Scene::LaybyScene) {
+      P = 1;
+      D = 10;
+    } else if (scene == Scene::CateringScene) {
+      P = 3;
+      D = 10;
     }
     motion.poseCtrl(ctrlCenter, scene, P, D, motion.params.pd_P,
                     motion.params.pd_D);
 
     uart->carControl(motion.speed, motion.servoPwm);
 
-    //[15] 综合显示调试UI窗口
+    //[16] 综合显示调试UI窗口
     if (motion.params.debug) {
       // 帧率计算
       auto startTime = std::chrono::duration_cast<std::chrono::milliseconds>(
                            std::chrono::system_clock::now().time_since_epoch())
                            .count();
+      frameTime = startTime - preTime;
       if (motion.params.debug) {
         detection->drawBox(img);
         ctrlCenter.drawImage(tracking, scene, img);
+        // putText(img, formatDouble2String(1000.0 / frameTime, 1) + "FPS",
+        //         cv::Point(COLSIMAGE - 75, 80), cv::FONT_HERSHEY_PLAIN, 1,
+        //         cv::Scalar(0, 0, 255), 1);
 
-        putText(img,
-                formatDouble2String(1000.0 / (startTime - preTime), 1) + "FPS",
-                cv::Point(COLSIMAGE - 75, 80), cv::FONT_HERSHEY_PLAIN, 1,
-                cv::Scalar(0, 0, 255), 1);
-
-        putText(img,
-                "P:" + formatDouble2String(P, 1) +
-                    " D:" + formatDouble2String(D, 1),
-                cv::Point(COLSIMAGE - 98, 95), cv::FONT_HERSHEY_PLAIN, 1,
-                cv::Scalar(0, 0, 255), 1);
+        // putText(img,
+        //         "P:" + formatDouble2String(P, 1) +
+        //             " D:" + formatDouble2String(D, 1),
+        //         cv::Point(COLSIMAGE - 98, 95), cv::FONT_HERSHEY_PLAIN, 1,
+        //         cv::Scalar(0, 0, 255), 1);
+        // cv::circle(img, cv::Point(tracking.spurroad[0].y, tracking.spurroad[0].x), 5,
+                  //  cv::Scalar(0, 0, 255), -1); // 中心点
         cv::imshow("aa", img);
         cv::waitKey(1);
       }
@@ -366,7 +390,7 @@ int main(int argc, char const *argv[]) {
       savePicture(img);
     }
 
-    //[16] 状态复位
+    //[17] 状态复位
     if (sceneLast != scene) {
       if (scene == Scene::NormalScene)
         uart->buzzer = BUZZER_SLIENT;
@@ -389,7 +413,7 @@ int main(int argc, char const *argv[]) {
     else if (scene == Scene::StopScene)
       scene = Scene::NormalScene;
 
-    //[17] 按键退出程序
+    // [17] 按键退出程序
     if (uart->keypress) {
       uart->carControl(0, PWMSERVOMID); // 控制车辆停止运动
       std::this_thread::sleep_for(1s);

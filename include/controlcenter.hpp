@@ -18,7 +18,7 @@ public:
   uint16_t validRowsRight = 0; // 边缘有效行数（右）
   double sigmaCenter = 0;      // 中心点集的方差
   int left_num = 0, right_num = 0;
-  int aim_idx, speed_aim_idx;
+  int aim_idx = 0, speed_aim_idx;
 
   /**
    * @brief 控制中心计算
@@ -37,10 +37,9 @@ public:
     std::vector<POINT> v_center(4);
     style = "STRIGHT";
     int premode = 0;
-    // 关闭充电停车区逆透视 scene == Scene::ParkingScene ||
     if (scene == Scene::NormalScene || scene == Scene::CrossScene ||
-        scene == Scene::RingScene || scene == Scene::LaybyScene ||
-        scene == Scene::BridgeScene || scene == Scene::CateringScene) {
+        scene == Scene::RingScene || scene == Scene::CateringScene ||
+        scene == Scene::ParkingScene) {
 #if BOUNDARY_SHOW
       // 逆透视图像
       cv::Mat only_boundary =
@@ -136,13 +135,13 @@ public:
         }
       } else if (scene == Scene::CateringScene) {
         if (burgerLeft) {
-          spdlog::info("汉堡在左侧，循右线");
+          spdlog::info("[controlcenter] 汉堡在左侧，循左线");
           centerEdge = track_rightline(transformedPoints_Right, 5,
                                        0.225 * pixel_per_meter);
           style = "RIGHT";
 
         } else {
-          spdlog::info("汉堡在右侧，循左线");
+          spdlog::info("[controlcenter] 汉堡在右侧，循右线");
           centerEdge = track_leftline(transformedPoints_Left, 5,
                                       0.225 * pixel_per_meter);
           style = "LEFT";
@@ -203,8 +202,12 @@ public:
 
       pointsToTransform_center =
           convertPointsToCvPoints(centerEdge1); // 中线转为cvpoint
-      perspectiveTransform(pointsToTransform_center, transformedPoints,
-                           inverse); // 透视
+
+      if (!pointsToTransform_center.empty()) {
+
+        perspectiveTransform(pointsToTransform_center, transformedPoints,
+                             inverse); // 透视
+      }
       centerEdge_show1 =
           convertCvPointsToPoints(transformedPoints); // 透视后中线转为POINT
 
@@ -364,6 +367,8 @@ public:
                  cv::Scalar(255, 255, 255), -1);
         }
       }
+      if (centerEdge_show1.empty())
+        continue;
       if (centerEdge_show1[i].x >= 0 && centerEdge_show1[i].x < ROWSIMAGE &&
           centerEdge_show1[i].y >= 0 && centerEdge_show1[i].y < COLSIMAGE) {
         if (i == aim_idx) {

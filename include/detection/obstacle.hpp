@@ -1,166 +1,299 @@
-#pragma once
 #include "common.hpp"
 #include "detection.hpp"
-#include "recognition/tracking.hpp"
 
-/**
- * @brief 障碍区AI识别与路径规划类
- *
- */
 class Obstacle {
-
 public:
-  /**
-   * @brief 障碍区AI识别与路径规划处理
-   *
-   * @param track 赛道识别结果
-   * @param predict AI检测结果
-   * @return true
-   * @return false
-   */
-  bool process(Tracking &track, std::vector<PredictResult> predict) {
-    enable = false; // 场景检测使能标志
-    if (track.pointsEdgeLeft.size() < ROWSIMAGE / 2 ||
-        track.pointsEdgeRight.size() < ROWSIMAGE / 2)
-      return enable;
+  enum Step {
+    None = 0,
+    Start, // 识别到爆炸物
+    Inside,
+    End
+  };
 
-    std::vector<PredictResult> resultsObs; // 锥桶AI检测数据
-    for (size_t i = 0; i < predict.size(); i++) {
-      if ((predict[i].type == LABEL_CONE || predict[i].type == LABEL_BLOCK ||
-           predict[i].type == LABEL_PEDESTRIAN) &&
-          (predict[i].y + predict[i].height) >
-              ROWSIMAGE * 0.4) // AI标志距离计算
-        resultsObs.push_back(predict[i]);
-    }
+  Step step = Step::None;
+  PredictResult resultObs; // 避障目标锥桶
+  bool findFlag = false;
+  bool enable = false; // 场景检测使能标志
+  bool left = true;
+  int block_stage = 1;
+  int first = 0;
+  bool last_left = true;
+  int passblock = 0;
+  int counterExit = 0;
+  int colorcnt[4] = {0};
+  // TODO(me) merge pedstrain mode to fully cone mode
+  bool process(cv::Mat imageRGB, Tracking &track,
+               const std::vector<PredictResult> &predict, uint64_t frameTime,
+               float speed, int DisLeaving, const std::vector<int> &RoadWidth,
+               float UpScale, float block_scale, float distance_block,
+               int ObstacleMode) {
 
-    if (resultsObs.size() <= 0)
-      return enable;
-
-    // 选取距离最近的锥桶
-    int areaMax = 0; // 框面积
-    int index = 0;   // 目标序号
-    for (size_t i = 0; i < resultsObs.size(); i++) {
-      int area = resultsObs[i].width * resultsObs[i].height;
-      if (area >= areaMax) {
-        index = i;
-        areaMax = area;
+    if (step == Step::None) {
+      for (size_t i = 0; i < predict.size(); i++) {
+        if ((predict[i].type == LABEL_PEDESTRIAN) && predict[i].score > 0.6) {
+        }
+      }
+      if (hsvSearch(imageRGB, track)) {
+        first = 0;
+        step = Step::Start;
+        counterExit = 0;
       }
     }
-    resultObs = resultsObs[index];
-    enable = true; // 场景检测使能标志
 
-    // 障碍物方向判定（左/右）
-    int row = track.pointsEdgeLeft.size() -
-              (resultsObs[index].y + resultsObs[index].height - track.rowCutUp);
-    if (row < 0) // 无需规划路径
-      return enable;
+    if (step == Step::Start) {
+      findFlag = false;
+      // 锥桶检测
+      cv::Mat hsv;
+      cv::cvtColor(imageRGB, hsv, cv::COLOR_BGR2HSV);
+      // 定义黄色的HSV范围
+      cv::Scalar lowerYellow(15, 100, 60);
+      cv::Scalar upperYellow(35, 255, 255);
 
-    int disLeft = resultsObs[index].x + resultsObs[index].width -
-                  track.pointsEdgeLeft[row].y;
-    int disRight = track.pointsEdgeRight[row].y - resultsObs[index].x;
-    if (resultsObs[index].x + resultsObs[index].width >
-            track.pointsEdgeLeft[row].y &&
-        track.pointsEdgeRight[row].y > resultsObs[index].x &&
-        disLeft <= disRight) //[1] 障碍物靠左
-    {
-      if (resultsObs[index].type == LABEL_BLOCK) // 黑色路障特殊处理
+      cv::Mat Mask;
+      inRange(hsv, lowerYellow, upperYellow, Mask);
+
+      std::vector<std::vector<cv::Point>> contours;
+      findContours(Mask, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+
+      int x_Near = 0; // 行坐标
+      if (!contours.empty()) {
+        // 选取距离最近的锥桶
+        cv::Rect Cone;
+        for (const auto &contour : contours) {
+          cv::Rect Tempcone = boundingRect(contour);
+          if (Tempcone.y > ROWSIMAGE * UpScale &&
+              Tempcone.y + Tempcone.height < ROWSIMAGE - DisLeaving &&
+              Tempcone.y > x_Near) {
+            int row =
+                track.pointsEdgeLeft.size() - (Tempcone.y - track.rowCutUp);
+            if (row < 0) // 太远不管
+            {
+              continue;
+            }
+            int disLeft =
+                Tempcone.x + Tempcone.width -
+                track.pointsEdgeLeft[row].y; // 障碍右侧到左边线的水平距离
+            int disRight = track.pointsEdgeRight[row].y -
+                           Tempcone.x; // 右边线到障碍左侧的水平距离
+            if (disLeft >= 0 && disRight >= 0) {
+              findFlag = true;
+              Cone = Tempcone;
+              x_Near = Tempcone.y;
+            }
+          }
+        }
+
+        if (findFlag) {
+          resultObs.type = LABEL_CONE;
+          resultObs.x = Cone.x;
+          resultObs.y = Cone.y;
+          resultObs.height = Cone.height;
+          resultObs.width = Cone.width;
+        } else {
+          counterExit++;
+          if (counterExit > 50) {
+            step = Step::None;
+            return false;
+          }
+        }
+      }
+      if (ObstacleMode == 0) {
+        if (findFlag) {
+          // 障碍物方向判定（左/右）
+          int row =
+              track.pointsEdgeLeft.size() - (resultObs.y - track.rowCutUp);
+          int disLeft =
+              resultObs.x + resultObs.width -
+              track.pointsEdgeLeft[row].y; // 障碍右侧到左边线的水平距离
+          int disRight = track.pointsEdgeRight[row].y -
+                         resultObs.x; // 右边线到障碍左侧的水平距离
+          if (disLeft <= disRight)    //[1] 障碍物在赛道内， 且靠左
+          {
+            left = false;
+          } else if (disLeft > disRight) //[2] 障碍物在赛道内，且靠右
+          {
+            left = true;
+          }
+          if (first == 0) {
+            last_left = left;
+            first = 1;
+          } else if (first == 1 && last_left != left) {
+            step = Step::Inside;
+            first = 0;
+          }
+        }
+        if (first == 1)
+          curtailTracking(track, left,
+                          RoadWidth); // 缩减优化车道线（双车道→单车道）
+                                      // if(left)
+                                      // {
+        //     for (int i = 0; i < track.pointsEdgeRight.size(); i++)
+        //     {
+        //         track.pointsEdgeRight[i].y = track.pointsEdgeLeft[i].y +
+        //         RoadWidth[i]/ 2 + 20;
+        //     }
+        // }
+        // else
+        // {
+        //     for (int i = 0; i < track.pointsEdgeLeft.size(); i++)
+        //     {
+        //         track.pointsEdgeLeft[i].y = track.pointsEdgeRight[i].y -
+        //         RoadWidth[i]/ 2 - 20;
+        //     }
+        // }
+      } else if (ObstacleMode == 1) {
+        if (findFlag)
+          step = Step::Inside;
+      }
+    }
+
+    if (step == Step::Inside) {
+      findFlag = false;
+      // 锥桶检测
+      cv::Mat hsv;
+      cvtColor(imageRGB, hsv, cv::COLOR_BGR2HSV);
+      // 定义黄色的HSV范围
+      cv::Scalar lowerYellow(15, 100, 60);
+      cv::Scalar upperYellow(35, 255, 255);
+
+      cv::Mat Mask;
+      inRange(hsv, lowerYellow, upperYellow, Mask);
+
+      std::vector<std::vector<cv::Point>> contours;
+      findContours(Mask, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+
+      int x_Near = 0; // 框面积
+      if (!contours.empty()) {
+        // 选取距离最近的锥桶
+        cv::Rect Cone;
+        for (const auto &contour : contours) {
+          cv::Rect Tempcone = boundingRect(contour);
+          if (Tempcone.y > ROWSIMAGE * UpScale &&
+              Tempcone.y + Tempcone.height < ROWSIMAGE - DisLeaving &&
+              Tempcone.y > x_Near) {
+            int row =
+                track.pointsEdgeLeft.size() - (Tempcone.y - track.rowCutUp);
+            if (row < 0) // 太远不管
+            {
+              continue;
+            }
+            int disLeft =
+                Tempcone.x + Tempcone.width -
+                track.pointsEdgeLeft[row].y; // 障碍右侧到左边线的水平距离
+            int disRight = track.pointsEdgeRight[row].y -
+                           Tempcone.x; // 右边线到障碍左侧的水平距离
+            if (disLeft >= 0 && disRight >= 0) {
+              findFlag = true;
+              Cone = Tempcone;
+              x_Near = Tempcone.y;
+            }
+          }
+        }
+        if (findFlag) {
+          resultObs.type = LABEL_CONE;
+          resultObs.x = Cone.x;
+          resultObs.y = Cone.y;
+          resultObs.height = Cone.height;
+          resultObs.width = Cone.width;
+        }
+      }
+      if (!findFlag) // 障碍之间未识别到
       {
-        curtailTracking(track, false); // 缩减优化车道线（双车道→单车道）
-      } else if (resultsObs[index].type == LABEL_PEDESTRIAN) // 行人特殊处理
-      {
-        std::vector<POINT> points(4); // 三阶贝塞尔曲线
-        points[0] = track.pointsEdgeLeft[row / 2];
-        points[1] = {resultsObs[index].y + resultsObs[index].height,
-                     resultsObs[index].x + resultsObs[index].width * 2};
-        points[2] = {(resultsObs[index].y + resultsObs[index].height +
-                      resultsObs[index].y) /
-                         2,
-                     resultsObs[index].x + resultsObs[index].width * 2};
-        if (resultsObs[index].y >
-            track.pointsEdgeLeft[track.pointsEdgeLeft.size() - 1].x)
-          points[3] = track.pointsEdgeLeft[track.pointsEdgeLeft.size() - 1];
-        else
-          points[3] = {resultsObs[index].y,
-                       resultsObs[index].x + resultsObs[index].width};
-
-        track.pointsEdgeLeft.resize((size_t)row / 2); // 删除错误路线
-        std::vector<POINT> repair = Bezier(0.01, points);  // 重新规划车道线
-        for (size_t i = 0; i < repair.size(); i++)
-          track.pointsEdgeLeft.push_back(repair[i]);
-        curtailTracking(track, false); // 缩减优化车道线（双车道→单车道）
+        // 情况二 障碍与赛道边线无间隔
+        for (int i = 40; i < track.pointsEdgeLeft.size(); i += 2) {
+          if (track.pointsEdgeLeft[i].y < track.pointsEdgeLeft[i - 5].y - 5 /**/
+              && track.pointsEdgeLeft[i].x > ROWSIMAGE * block_scale) {
+            distance = 0;
+            step = Step::End;
+            passblock = 0;
+            left = false;
+            break;
+          } else if (track.pointsEdgeRight[i].y >
+                         track.pointsEdgeRight[i - 5].y + 5 /**/
+                     && track.pointsEdgeLeft[i].x > ROWSIMAGE * block_scale) {
+            distance = 0;
+            step = Step::End;
+            passblock = 0;
+            left = true;
+            break;
+          }
+        }
+        // 单车道补线
+        if (step != Step::End) {
+          curtailTracking(track, left, RoadWidth);
+        }
       } else {
-        std::vector<POINT> points(4); // 三阶贝塞尔曲线
-        points[0] = track.pointsEdgeLeft[row / 2];
-        points[1] = {resultsObs[index].y + resultsObs[index].height,
-                     resultsObs[index].x + resultsObs[index].width * 2};
-        points[2] = {(resultsObs[index].y + resultsObs[index].height +
-                      resultsObs[index].y) /
-                         2,
-                     resultsObs[index].x + resultsObs[index].width * 2};
-        if (resultsObs[index].y >
-            track.pointsEdgeLeft[track.pointsEdgeLeft.size() - 1].x)
-          points[3] = track.pointsEdgeLeft[track.pointsEdgeLeft.size() - 1];
-        else
-          points[3] = {resultsObs[index].y,
-                       resultsObs[index].x + resultsObs[index].width};
+        // 障碍物方向判定（左/右）
+        int row = track.pointsEdgeLeft.size() - (resultObs.y - track.rowCutUp);
+        int disLeft = resultObs.x + resultObs.width -
+                      track.pointsEdgeLeft[row].y; // 障碍右侧到左边线的水平距离
+        int disRight = track.pointsEdgeRight[row].y -
+                       resultObs.x; // 右边线到障碍左侧的水平距离
+        if (disLeft > 0 && disRight > 0 &&
+            disLeft <= disRight) //[1] 障碍物在赛道内， 且靠左
+        {
+          left = false;
+          std::vector<POINT> points(4); // 三阶贝塞尔曲线
+          points[0] = track.pointsEdgeLeft[row / 2];
+          points[1] = {resultObs.y + resultObs.height,
+                       resultObs.x + resultObs.width};
+          points[2] = {(resultObs.y + resultObs.height + resultObs.y) / 2,
+                       resultObs.x + resultObs.width};
+          if (resultObs.y >
+              track.pointsEdgeLeft[track.pointsEdgeLeft.size() - 1].x)
+            points[3] = track.pointsEdgeLeft[track.pointsEdgeLeft.size() - 1];
+          else
+            points[3] = {resultObs.y, resultObs.x + resultObs.width};
 
-        track.pointsEdgeLeft.resize((size_t)row / 2); // 删除错误路线
-        std::vector<POINT> repair = Bezier(0.01, points);  // 重新规划车道线
-        for (size_t i = 0; i < repair.size(); i++)
-          track.pointsEdgeLeft.push_back(repair[i]);
-      }
-    } else if (resultsObs[index].x + resultsObs[index].width >
-                   track.pointsEdgeLeft[row].y &&
-               track.pointsEdgeRight[row].y > resultsObs[index].x &&
-               disLeft > disRight) //[2] 障碍物靠右
-    {
-      if (resultsObs[index].type == LABEL_BLOCK) // 黑色路障特殊处理
-      {
-        curtailTracking(track, true); // 缩减优化车道线（双车道→单车道）
-      } else if (resultsObs[index].type == LABEL_PEDESTRIAN) // 行人特殊处理
-      {
-        std::vector<POINT> points(4); // 三阶贝塞尔曲线
-        points[0] = track.pointsEdgeRight[row / 2];
-        points[1] = {resultsObs[index].y + resultsObs[index].height,
-                     resultsObs[index].x - resultsObs[index].width};
-        points[2] = {(resultsObs[index].y + resultsObs[index].height +
-                      resultsObs[index].y) /
-                         2,
-                     resultsObs[index].x - resultsObs[index].width};
-        if (resultsObs[index].y >
-            track.pointsEdgeRight[track.pointsEdgeRight.size() - 1].x)
-          points[3] = track.pointsEdgeRight[track.pointsEdgeRight.size() - 1];
-        else
-          points[3] = {resultsObs[index].y, resultsObs[index].x};
+          track.pointsEdgeLeft.resize((size_t)row / 2); // 删除错误路线
 
-        track.pointsEdgeRight.resize((size_t)row / 2); // 删除错误路线
-        std::vector<POINT> repair = Bezier(0.01, points);   // 重新规划车道线
-        for (size_t i = 0; i < repair.size(); i++)
-          track.pointsEdgeRight.push_back(repair[i]);
-        curtailTracking(track, true); // 缩减优化车道线（双车道→单车道）
-      } else {
-        std::vector<POINT> points(4); // 三阶贝塞尔曲线
-        points[0] = track.pointsEdgeRight[row / 2];
-        points[1] = {resultsObs[index].y + resultsObs[index].height,
-                     resultsObs[index].x - resultsObs[index].width};
-        points[2] = {(resultsObs[index].y + resultsObs[index].height +
-                      resultsObs[index].y) /
-                         2,
-                     resultsObs[index].x - resultsObs[index].width};
-        if (resultsObs[index].y >
-            track.pointsEdgeRight[track.pointsEdgeRight.size() - 1].x)
-          points[3] = track.pointsEdgeRight[track.pointsEdgeRight.size() - 1];
-        else
-          points[3] = {resultsObs[index].y, resultsObs[index].x};
+          std::vector<POINT> repair = Bezier(0.01, points); // 重新规划车道线
+          for (int i = 0; i < repair.size(); i++) {
+            repair[i].y += 40;
+            // if(repair[i].y>COLSIMAGE) repair[i].y=COLSIMAGE-1;
+            track.pointsEdgeLeft.push_back(repair[i]);
+          }
+        } else if (disLeft > 0 && disRight > 0 &&
+                   disLeft > disRight) //[2] 障碍物在赛道内，且靠右
+        {
+          left = true;
+          std::vector<POINT> points(4); // 三阶贝塞尔曲线
+          points[0] = track.pointsEdgeRight[row / 2];
+          points[1] = {resultObs.y + resultObs.height,
+                       resultObs.x - resultObs.width};
+          points[2] = {(resultObs.y + resultObs.height + resultObs.y) / 2,
+                       resultObs.x - resultObs.width};
+          if (resultObs.y >
+              track.pointsEdgeRight[track.pointsEdgeRight.size() - 1].x)
+            points[3] = track.pointsEdgeRight[track.pointsEdgeRight.size() - 1];
+          else
+            points[3] = {resultObs.y, resultObs.x};
 
-        track.pointsEdgeRight.resize((size_t)row / 2); // 删除错误路线
-        std::vector<POINT> repair = Bezier(0.01, points);   // 重新规划车道线
-        for (size_t i = 0; i < repair.size(); i++)
-          track.pointsEdgeRight.push_back(repair[i]);
+          track.pointsEdgeRight.resize((size_t)row / 2); // 删除错误路线
+          std::vector<POINT> repair = Bezier(0.01, points); // 重新规划车道线
+          for (int i = 0; i < repair.size(); i++) {
+            repair[i].y -= 40;
+            // if(repair[i].y<0) repair[i].y=0;
+            track.pointsEdgeRight.push_back(repair[i]);
+          }
+        }
       }
     }
 
-    return enable;
+    if (step == Step::End) {
+      distance += speed * frameTime / 1000;
+      if (distance > distance_block) {
+        first = 0;
+        step = Step::None;
+        return false;
+      }
+      curtailTracking(track, left, RoadWidth);
+    }
+
+    if (step == Step::None)
+      return false;
+    else
+      return true;
   }
 
   /**
@@ -169,8 +302,8 @@ public:
    * @param img 需要叠加显示的图像
    */
   void drawImage(cv::Mat &img) {
-    if (enable) {
-      putText(img, "[2] Obstacle - ENABLE", cv::Point(10, 10),
+    if (findFlag) {
+      putText(img, "[2] Obstacle- ENABLE", cv::Point(COLSIMAGE / 2 - 30, 10),
               cv::FONT_HERSHEY_TRIPLEX, 0.3, cv::Scalar(0, 255, 0), 1, CV_AA);
       cv::Rect rect(resultObs.x, resultObs.y, resultObs.width,
                     resultObs.height);
@@ -179,8 +312,7 @@ public:
   }
 
 private:
-  bool enable = false;     // 场景检测使能标志
-  PredictResult resultObs; // 避障目标锥桶
+  float distance = 0;
 
   /**
    * @brief 缩减优化车道线（双车道→单车道）
@@ -188,25 +320,70 @@ private:
    * @param track
    * @param left
    */
-  void curtailTracking(Tracking &track, bool left, int offset=50) {
-    if (left) // 向左侧缩进
-    {
+  void curtailTracking(Tracking &track, bool left,
+                       const std::vector<int> &RoadWidth) {
+    if (left) {
       if (track.pointsEdgeRight.size() > track.pointsEdgeLeft.size())
         track.pointsEdgeRight.resize(track.pointsEdgeLeft.size());
 
-      for (size_t i = 0; i < track.pointsEdgeRight.size(); i++) {
+      for (int i = 0; i < track.pointsEdgeRight.size(); i++) {
         track.pointsEdgeRight[i].y =
-            ((track.pointsEdgeRight[i].y + track.pointsEdgeLeft[i].y) / 2) + offset;
+            track.pointsEdgeLeft[i].y + RoadWidth[i] / 2;
       }
-    } else // 向右侧缩进
-    {
+      // 向右侧缩进
+    } else {
       if (track.pointsEdgeRight.size() < track.pointsEdgeLeft.size())
         track.pointsEdgeLeft.resize(track.pointsEdgeRight.size());
 
-      for (size_t i = 0; i < track.pointsEdgeLeft.size(); i++) {
+      for (int i = 0; i < track.pointsEdgeLeft.size(); i++) {
         track.pointsEdgeLeft[i].y =
-            ((track.pointsEdgeRight[i].y + track.pointsEdgeLeft[i].y) / 2) - offset;
+            track.pointsEdgeRight[i].y - RoadWidth[i] / 2;
       }
     }
+  }
+  bool hsvSearch(cv::Mat image, Tracking track) {
+    // 图像边长压缩比例为2：1
+    // 将图像从BGR转换为HSV颜色空间，以便更容易提取红色
+    int red = 0, yellow_l = 0, yellow_r = 0, yellow_c = 0;
+    cv::Mat hsv_img;
+    cvtColor(image, hsv_img, cv::COLOR_BGR2HSV);
+    int bound = (track.pointsEdgeLeft.size() > 30) ? 30 : 0;
+
+    for (int i = bound; i < track.pointsEdgeLeft.size(); i += 2) {
+      for (int y = 0; y < COLSIMAGE; y += 2) {
+        cv::Vec3b hsv = hsv_img.at<cv::Vec3b>(track.pointsEdgeLeft[i].x, y);
+        // 找红色
+        if (((hsv[0] >= 170 && hsv[0] <= 180) ||
+             (hsv[0] >= 0 && hsv[0] <= 10)) &&
+            hsv[1] >= 100 && hsv[2] >= 60 && hsv[1] <= 255 && hsv[2] <= 255) {
+          if (y > track.pointsEdgeRight[i].y)
+            red++;
+          continue;
+        }
+        if ((hsv[0] >= 15 && hsv[0] <= 35) && hsv[1] >= 100 && hsv[2] >= 60 &&
+            hsv[1] <= 255 && hsv[2] <= 255) {
+          if (y < track.pointsEdgeLeft[i].y)
+            yellow_l++;
+          else if (y > track.pointsEdgeRight[i].y)
+            yellow_r++;
+          else if (y > track.pointsEdgeLeft[i].y &&
+                   y < track.pointsEdgeRight[i].y)
+            yellow_c++;
+        }
+      }
+    }
+    colorcnt[0] = red;
+    colorcnt[1] = yellow_l;
+    colorcnt[2] = yellow_c;
+    colorcnt[3] = yellow_r;
+    // params[0]=red;params[1]=yellow_l;params[2]=yellow_c;params[3]=yellow_r;
+    // if (yellow_l >= 20 && yellow_c <= 3 && yellow_r >= 20) {
+    //   RescueFlag = true;
+    //   return;
+    // }
+    if (/*red>=30 &&*/ yellow_c >= 20) {
+      return true;
+    }
+    return false;
   }
 };

@@ -88,36 +88,49 @@ public:
     uint16_t rowCutBottom = 0; // 图像顶部切行
     int parkingStopTime = 100;
     int parkingTurningTime = 21;
-    int laybyCurtailOffset = 50; // 临时停车区单车道偏移
     int laybyMoment = 110;
     int laybyStopTime = 200;
 
     int cateringTurningTime = 50; // 转弯时间 25帧
     int cateringTravelTime = 10; // 行驶时间 10帧 在斜线路段的行驶时间
     int cateringStopTime = 100; // 停车时间
-    bool bridge = true;         // 坡道区使能
-    bool catering = true;       // 快餐店使能
-    bool layby = true;          // 临时停车区使能
-    bool obstacle = true;       // 障碍区使能
-    bool parking = true;        // 停车场使能
-    bool ring = true;           // 环岛使能
-    bool cross = true;          // 十字道路使能
-    bool stop = true;           // 停车区使能
+
+    int Obstacle_disleaving = 0;
+    float Obstacle_upscale = 0;
+    float Obstacle_block_scale = 0;
+    float Obstacle_distance_block = 0;
+
+    int Obstacle_Start_P = 0;
+    int Obstacle_Start_D = 0;
+    int Obstacle_P1 = 0;
+    int Obstacle_D1 = 0;
+    int Obstacle_P2 = 0;
+    int Obstacle_D2 = 0;
+
+    bool bridge = true;   // 坡道区使能
+    bool catering = true; // 快餐店使能
+    bool layby = true;    // 临时停车区使能
+    bool obstacle = true; // 障碍区使能
+    bool parking = true;  // 停车场使能
+    bool ring = true;     // 环岛使能
+    bool cross = true;    // 十字道路使能
+    bool stop = true;     // 停车区使能
 
     float score = 0.0;                                      // AI检测置信度
-    std::string model = "../res/model/yolov3_mobilenet_v1"; // 模型路径
-    std::string video = "../res/samples/demo.mp4";          // 视频路径
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(
         Params, speedLow, speedHigh, speedBridge, speedCatering, speedLayby,
         speedObstacle, speedParking, speedRing, speedDown, pd_P, pd_D, NormP,
         NormD, alpha, ringSum, ringEnter0, ringP0, ringD0, ringEnter1, ringP1,
         ringD1, ringEnter2, ringP2, ringD2, ringEnter3, ringP3, ringD3,
         aim_distance, track_startline, pl, ph, debug, saveImg, rowCutUp,
-        rowCutBottom, parkingStopTime, parkingTurningTime, laybyCurtailOffset,
-        laybyMoment, laybyStopTime, cateringTurningTime, cateringTravelTime,
-        cateringStopTime, bridge, catering, layby, obstacle, parking, ring,
-        cross, stop, score, model,
-        video); // 添加构造函数
+        rowCutBottom, parkingStopTime, parkingTurningTime, laybyMoment,
+        laybyStopTime, cateringTurningTime, cateringTravelTime,
+        cateringStopTime, Obstacle_disleaving, Obstacle_upscale,
+        Obstacle_block_scale, Obstacle_distance_block,
+        Obstacle_Start_P, Obstacle_Start_D, Obstacle_P1, Obstacle_D1,
+        Obstacle_P2, Obstacle_D2, bridge, catering, layby, obstacle, parking,
+        ring, cross, stop, score 
+        ); // 添加构造函数
   };
 
   Params params;                   // 读取控制参数
@@ -132,40 +145,57 @@ public:
    */
   void poseCtrl(const ControlCenter &controlCenter, Scene scene, float P,
                 float D, float pd_P, float pd_D) {
-    // TODO(me): 场景判断
-    // 纯跟随
-    POINT car(ROWSIMAGE - 1, COLSIMAGE / 2 - 5);
-    // 计算远锚点偏差值 delta
-    float dy = controlCenter.centerEdge[controlCenter.aim_idx].x - car.x;
-    float dx = car.y - controlCenter.centerEdge[controlCenter.aim_idx].y;
-    float dn = sqrt(dx * dx + dy * dy);
-    pure_angle =
-        atanf(pixel_per_meter * 2 * params.aim_distance * dx / dn / dn) / PI *
-        180;
-    // pure_angle -= 1;
-    // if(pure_angle>0) pure_angle += 2;//pure_angle *= left_scale;
-    // else pure_angle -= 1;//pure_angle *= right_scale;
-    // cout << pure_angle << endl;
-    // 偏角度闭环
-    int pwmDiff = 0;
-    pwmDiff = (pure_angle * P) + (pure_angle - pure_angleLast) * D;
-    pure_angleLast = pure_angle;
+    if (scene == Scene::NormalScene || scene == Scene::CrossScene ||
+        scene == Scene::ParkingScene || scene == Scene::RingScene) {
+      // 纯跟随
+      POINT car(ROWSIMAGE - 1, COLSIMAGE / 2 - 5);
+      // 计算远锚点偏差值 delta
+      float dy = controlCenter.centerEdge[controlCenter.aim_idx].x - car.x;
+      float dx = car.y - controlCenter.centerEdge[controlCenter.aim_idx].y;
+      float dn = sqrt(dx * dx + dy * dy);
+      pure_angle =
+          atanf(pixel_per_meter * 2 * params.aim_distance * dx / dn / dn) / PI *
+          180;
+      // pure_angle -= 1;
+      // if(pure_angle>0) pure_angle += 2;//pure_angle *= left_scale;
+      // else pure_angle -= 1;//pure_angle *= right_scale;
+      // cout << pure_angle << endl;
+      // 偏角度闭环
+      int pwmDiff = 0;
+      pwmDiff = (pure_angle * P) + (pure_angle - pure_angleLast) * D;
+      pure_angleLast = pure_angle;
 
-    // 二阶误差闭环
-    float pd_error = COLSIMAGE / 2.0 - controlCenter.controlCenter;
-    static int pd_errorLast = 0;
-    int pd_pwmDiff = 0;
-    pd_pwmDiff = (pd_error * pd_P) + (pd_error - pd_errorLast) * pd_D;
-    pd_errorLast = pd_error;
+      // 二阶误差闭环
+      float pd_error = COLSIMAGE / 2.0 - controlCenter.controlCenter;
+      static int pd_errorLast = 0;
+      int pd_pwmDiff = 0;
+      pd_pwmDiff = (pd_error * pd_P) + (pd_error - pd_errorLast) * pd_D;
+      pd_errorLast = pd_error;
 
-    servoPwm =
-        (uint16_t)(PWMSERVOMID + params.alpha * pwmDiff + (1-params.alpha) * pd_pwmDiff); // PWM转换
-    // 舵机限幅
-    if (servoPwm > PWMSERVOMAX) {
-      servoPwm = PWMSERVOMAX;
-    }
-    if (servoPwm < PWMSERVOMIN) {
-      servoPwm = PWMSERVOMIN;
+      servoPwm = (uint16_t)(PWMSERVOMID + params.alpha * pwmDiff +
+                            (1 - params.alpha) * pd_pwmDiff); // PWM转换
+      // 舵机限幅
+      if (servoPwm > PWMSERVOMAX) {
+        servoPwm = PWMSERVOMAX;
+      }
+      if (servoPwm < PWMSERVOMIN) {
+        servoPwm = PWMSERVOMIN;
+      }
+    } else {
+      float error =
+          COLSIMAGE / 2 - controlCenter.controlCenter; // 图像控制中心转换偏差
+      static int errorLast = 0; // 记录前一次的偏差
+      int pwmDiff = 0;
+      pwmDiff = (error * P) + (error - errorLast) * D; // 舵机PWM偏移量
+      errorLast = error;
+      servoPwm = (uint16_t)(PWMSERVOMID + pwmDiff); // PWM转换
+                                                    // 舵机限幅
+      if (servoPwm > PWMSERVOMAX) {
+        servoPwm = PWMSERVOMAX;
+      }
+      if (servoPwm < PWMSERVOMIN) {
+        servoPwm = PWMSERVOMIN;
+      }
     }
   }
 

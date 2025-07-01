@@ -267,8 +267,8 @@ public:
           result.label + " [" + score.substr(0, score.find(".") + 3) + "]";
       cv::Rect rect(result.x, result.y, result.width, result.height);
       cv::rectangle(img, rect, getCvcolor(result.type), 1);
-      cv::putText(img, label_name, cv::Point(result.x, result.y),
-                  cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(0, 0, 254), 1);
+      cv::putText(img, label_name, cv::Point(10, 10 * i),
+                  cv::FONT_HERSHEY_PLAIN, 0.3, cv::Scalar(0, 0, 254), 1);
     }
   }
 

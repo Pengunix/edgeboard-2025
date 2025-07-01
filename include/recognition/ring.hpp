@@ -107,7 +107,6 @@ public:
           if ((cnt[0] > 5 && cnt[0] < 20 && cnt[1] > 10 && cnt[1] < 45 &&
                cnt[2] > 0 && track.stdevLeft < 70)) {
             R100 = true;
-            spdlog::info("R100!");
           } else {
             R100 = false;
           }
@@ -359,9 +358,8 @@ public:
         /*|| EnteringCounter > 40*/
 
         // 这里改过
-        spdlog::info("30: {}", track.pointsEdgeRight[30].y);
         if ((track.pointsEdgeRight.size() < 180 &&
-             track.pointsEdgeRight[10].y < COLSIMAGE - 20 && track.pointsEdgeRight[30].y < COLSIMAGE - 70 && track.stdevRight > 100)) {
+             track.pointsEdgeRight[10].y < COLSIMAGE - 20 && track.pointsEdgeRight[30].y < COLSIMAGE - 50 && track.stdevRight > 100)) {
           ringStep = RingStep::Inside;
         }
 
@@ -502,7 +500,7 @@ public:
         //    printf("%d %d\n",left_state,  left_cnt);
       }
     } else if (ringStep == RingStep::Exiting) {
-      spdlog::info("退出环岛");
+      spdlog::info("环岛Exiting");
       if (ringType == RingType::RingLeft) {
         int whitecnt = 0;
         int stage = 0;
@@ -577,7 +575,7 @@ public:
             right_leave = true;
         }
 
-        if (stage == 1 && track.stdevLeft < 50 && track.stdevLeft > 0 &&
+        if (stage == 1 && track.stdevLeft < 50 && track.stdevLeft > 1 &&
             (whitecnt < 10 || right_leave)) {
           ringStep = RingStep::None;
           ringType = RingType::RingNone;

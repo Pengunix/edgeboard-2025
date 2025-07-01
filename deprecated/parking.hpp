@@ -5,8 +5,6 @@
 
 class Parking {
 public:
-  int testcircleX = 0;
-  int testcircleY = 0;
   /**
    * @brief 停车步骤
    *
@@ -22,10 +20,14 @@ public:
   ParkStep step = ParkStep::none; // 停车步骤
   bool parkLeft = false;
 
+  Parking(int turn, int carstop) : turningTime(turn), stopTime(carstop) {}
+
   bool process(Tracking &track, cv::Mat &image,
-               std::vector<PredictResult> predict) {
+               const std::vector<PredictResult> &predict) {
     counterSession++;
-    if (step != ParkStep::none && counterSession > 70) // 超时退出
+    if (step != ParkStep::none &&
+        counterSession > 300) // 超时退出      pathsEdgeLeft.pop_back();
+
     {
       counterRec = 0;
       counterSession = 0;
@@ -73,168 +75,115 @@ public:
       batteryY = ROWSIMAGE; // 充电站标识高度
 
       for (size_t i = 0; i < predict.size(); i++) {
-        if (predict[i].type == LABEL_CAR && predict[i].score > 0.6) {
-          carY = (predict[i].y + predict[i].height) / 2; // 计算智能车的中心高度
+        if (predict[i].type == LABEL_CAR && predict[i].score > 0.7) {
+          carY = (predict[i].y + predict[i].height) / 2; // 计算车的中心高度
         } else if ((predict[i].type == LABEL_BATTERY) &&
                    predict[i].score > 0.6) {
           batteryY = predict[i].y + predict[i].height; // 标识牌底部高度
         }
       }
-      // 图像预处理
-      cv::Mat edges;
-      Canny(image, edges, 50, 150);
-      cv::dilate(edges, edges, 5);
 
-      // 霍夫变换检测直线
-      lines.clear();
-
-      HoughLinesP(edges, lines, 1, CV_PI / 180, 40, 20, 10);
-
-      horizontalLines.clear();
-
-      for (const cv::Vec4i &line : lines) {
-        cv::Point pt1(line[0], line[1]);
-        cv::Point pt2(line[2], line[3]);
-
-        double angle = atan2(pt2.y - pt1.y, pt2.x - pt1.x) * 180.0 / CV_PI;
-        int midX = (line[0] + line[2]) / 2;
-        int midY = (line[1] + line[3]) / 2;
-
-        // 接近水平并且在右侧 没有车 或车在二号库
-        // TODO(me) 根据规则，还有左侧
-        if (abs(angle) < 30 && angle < 0 && midY < batteryY && midY < 200 &&
-            midX > COLSIMAGE / 2) { // 接近水平
-          horizontalLines.push_back(line);
-        }
+      if (1) {
+        garageFirst = true; // 进入一号车库
+        // lineY = std::min(midY1, midY2); // 获取距离最远的线控制车入库
+        step = ParkStep::turning; // 开始入库
+        counterSession = 0;
+        spdlog::info("[parking] 1号车库");
+      } else if (0) {
+        garageFirst = false; // 进入二号车库
+        // lineY = std::min(midY1, midY2); // 获取距离最远的线控制车入库
+        step = ParkStep::turning; // 开始入库
+        counterSession = 0;
+        spdlog::info("[parking] 2号车库");
+      } else {
+        counterSession = 0;
+        step = ParkStep::turning; // 开始入库
+        // lineY = std::min(midY1, midY2); // 获取距离最远的线控制车入库
+        spdlog::info("[parking] 1号车库");
       }
-
-      if (horizontalLines.size() >= 2) {
-        // 查找平行且距离大于20的线对
-        for (size_t i = 0; i < horizontalLines.size(); i++) {
-
-          for (size_t j = i + 1; j < horizontalLines.size(); j++) {
-            // 计算两条线的中点y坐标
-            int midY1 = (horizontalLines[i][1] + horizontalLines[i][3]) / 2;
-            int midY2 = (horizontalLines[j][1] + horizontalLines[j][3]) / 2;
-
-            cv::Vec4i line1 = horizontalLines[i];
-            cv::Vec4i line2 = horizontalLines[j];
-
-            // 计算两条线的角度
-            double angle1 =
-                atan2(line1[3] - line1[1], line1[2] - line1[0]) * 180.0 / CV_PI;
-            double angle2 =
-                atan2(line2[3] - line2[1], line2[2] - line2[0]) * 180.0 / CV_PI;
-
-            // 如果两条线距离大于20像素并且角度差小于25度
-            if (abs(midY1 - midY2) > 20 && abs(angle1 - angle2) < 25 &&
-                step == ParkStep::enable) {
-
-              if (carY > std::max(midY1, midY2)) {
-                garageFirst = true;             // 进入一号车库
-                lineY = std::min(midY1, midY2); // 获取距离最远的线控制车入库
-                step = ParkStep::turning; // 开始入库
-                counterSession = 0;
-                spdlog::info("[parking] 1号车库");
-              } else if (carY < std::min(midY1, midY2)) {
-                garageFirst = false;            // 进入二号车库
-                lineY = std::min(midY1, midY2); // 获取距离最远的线控制车入库
-                step = ParkStep::turning; // 开始入库
-                counterSession = 0;
-                spdlog::info("[parking] 2号车库");
-              } else {
-                counterSession = 0;
-                step = ParkStep::turning; // 开始入库
-                lineY = std::min(midY1, midY2); // 获取距离最远的线控制车入库
-                spdlog::info("[parking] 1号车库");
-              }
-
-              break;
-            }
-            // else
-            // {
-            //     std::cout << "abs(midY1 - midY2): " << abs(midY1 - midY2) <<
-            //     std::endl; std::cout << "abs(angle1 - angle2): " <<
-            //     abs(angle1 - angle2) << std::endl;
-            // }
-          }
-        }
-      }
-      break;
     }
     case ParkStep::turning: // 入库转向
     {
-      // 图像预处理
-      cv::Mat edges;
-      Canny(image, edges, 50, 150);
-
-      // 霍夫变换检测直线
-      std::vector<cv::Vec4i> lines;
-      HoughLinesP(edges, lines, 1, CV_PI / 180, 40, 40, 10);
-
-      // 右侧车库 从标志牌高度开始找赛道边缘的跳变点 作为最近的第一条横线中的点
-      for (int i = batteryY; i < track.pointsEdgeRight.size(); i++) {
+      // 右侧车库 从中间开始找赛道边缘的跳变点 作为最近的第一条横线中的点
+      for (int i = 10; i < track.pointsEdgeRight.size(); i++) {
+        // 跳变点增加约束，这里曲了平均值，将各个跳变点约束在相应直线附近
         if (track.pointsEdgeRight[i].y - track.pointsEdgeRight[i - 1].y > 20) {
           // track.pointsEdgeRight[i-2].y - track.pointsEdgeRight[i+2].y > 20) {
-          testcircleX = track.pointsEdgeRight[i].x;
-          testcircleY = track.pointsEdgeRight[i].y;
+          splitpointdown[1].x = track.pointsEdgeRight[i - 5].x;
+          int sum = 0;
+          for (int k = 0; k < 5; k++) {
+            sum += track.pointsEdgeRight[i - k].y;
+          }
+          splitpointdown[1].y = sum / 5;
+
+          splitpointdown[0].x = track.pointsEdgeRight[i + 5].x;
+          sum = 0;
+          for (int k = 0; k < 5; k++) {
+            sum += track.pointsEdgeRight[i + k].y;
+          }
+          splitpointdown[0].y = sum / 5;
+        }
+        if (track.pointsEdgeRight[i].y - track.pointsEdgeRight[i - 1].y < -20) {
+          splitpointup[0].x = track.pointsEdgeRight[i].x;
+          int sum = 0;
+          for (int k = 0; k < 5; k++) {
+            sum += track.pointsEdgeRight[i + k].y;
+          }
+          splitpointup[0].y = sum / 5;
+
+          splitpointup[1].x = track.pointsEdgeRight[i - 5].x;
+          sum = 0;
+          for (int k = 0; k < 5; k++) {
+            sum += track.pointsEdgeRight[i - k].y;
+          }
+          splitpointup[1].y = sum / 5;
+          splitpointfound = true;
           break;
         }
       }
-      std::vector<cv::Vec4i> horizontalLines;
-      cv::Mat imgRes = cv::Mat::zeros(cv::Size(COLSIMAGE, ROWSIMAGE),
-                                      CV_8UC3); // 创建全黑图像
-      for (const cv::Vec4i &line : lines) {
-        cv::Point pt1(line[0], line[1]);
-        cv::Point pt2(line[2], line[3]);
-
-        int midX = (line[0] + line[2]) / 2;
-
-        double angle = atan2(pt2.y - pt1.y, pt2.x - pt1.x) * 180.0 / CV_PI;
-
-        // 接近水平并且在右侧
-        if (abs(angle) < 40 && angle < 0 && midX > COLSIMAGE / 2) {
-          horizontalLines.push_back(line);
-          cv::line(edges, cv::Point(line[0], line[1]),
-                   cv::Point(line[2], line[3]), cv::Scalar(0, 0, 255), 1);
-          int midY = (line[1] + line[3]) / 2;       // 计算直线中点y坐标
-          if (midY > lineY && (midY - lineY) <= 10) // 限制线段增加值
-          {
-            lineY = midY; // 更新直线高度
-            ptA = pt1;    // 更新端点
-            ptB = pt2;
-          }
-        }
-      }
-      // cv::imshow("Detected Lines", edges);
-      // cv::waitKey(1);
-
-      if (lineY > ROWSIMAGE * swerveTime) // 控制转弯时机
-      {
+      // 控制转弯时机
+      if (splitpointfound && splitpointdown[1].x > 110) {
         if (!startTurning) {
           counterSession = 0;
           startTurning = true; // 已经开始转弯
         }
         spdlog::info("[parking] 控制转弯");
-        // 计算直线的斜率
-        double slope = static_cast<double>(ptB.y - ptA.y) /
-                       (ptB.x - ptA.x + 1e-5); // 避免除零
+        // 当两个补线点都在右侧, 转到跳变点不可靠时，切换正常循线，缩短跟随点
+        if (splitpointdown[1].y > ((COLSIMAGE / 2) - 80) &&
+            splitpointup[0].y > ((COLSIMAGE / 2) - 80)) {
+          // 入库补线
+          track.pointsEdgeLeft.clear();
+          track.pointsEdgeRight.clear();
+          POINT start = POINT(ROWSIMAGE - 30, 60);
+          POINT end = POINT((splitpointdown[1].x + splitpointup[0].x) / 2,
+                            (splitpointdown[1].y + splitpointup[0].y) / 2);
+          POINT middle =
+              POINT((start.x + end.x) * 0.5, (start.y + end.y) * 0.1);
+          std::vector<POINT> input = {start, middle, end};
+          track.pointsEdgeLeft = Bezier(0.02, input);
 
-        int y3 = slope * (0 - ptA.x) + ptA.y;         // 延长起点的Y坐标
-        int y4 = slope * (COLSIMAGE - ptA.x) + ptA.y; // 延长终点的Y坐标
-
-        // 入库补线
-        track.pointsEdgeLeft.clear();
-        POINT start = POINT(ROWSIMAGE - 31, 30);
-        POINT end = POINT(testcircleX, testcircleY);
-        POINT middle = POINT((start.x + end.x) * 0.3, (start.y + end.y) * 0.3);
-        std::vector<POINT> input = {start, middle, end};
-        track.pointsEdgeLeft = Bezier(0.02, input);
-        // 留着
-        // pathsEdgeLeft.push_back(track.pointsEdgeLeft); // 记录入库轨迹
+          // std::vector<POINT> lineWithSplitPoint =
+          //     points2line(end,
+          //                 POINT((splitpointdown[0].x + splitpointup[1].x) /
+          //                 2,
+          //                       (splitpointdown[0].y + splitpointup[1].y) /
+          //                       2),
+          //                 5);
+          // track.pointsEdgeLeft.insert(track.pointsEdgeLeft.end(),
+          //                             lineWithSplitPoint.begin(),
+          //                             lineWithSplitPoint.end()); // 补直线
+        } else if (startTurning) {
+          spdlog::info("[parking] 入库");
+          // 使用track.pointsEdgeLeft中的点延长左边线
+          track.pointsEdgeLeft = extendlineEdge(track.pointsEdgeLeft, 20);
+        }
+        // 入库轨迹
+        pathsEdgeLeft.push_back(track.pointsEdgeLeft);
         // pathsEdgeRight.push_back(track.pointsEdgeRight);
+      } else if (startTurning) {
+        pathsEdgeLeft.push_back(track.pointsEdgeLeft);
       }
-      if (counterSession > turningTIme && startTurning) // 开始停车状态
+      if (counterSession > turningTime && startTurning) // 开始停车状态
       {
         spdlog::info("[parking] 开始停车");
         step = ParkStep::stop; // 开始停车
@@ -245,14 +194,14 @@ public:
     {
       if (counterSession > stopTime) {
         step = ParkStep::trackout; // 开始倒车
-        spdlog::info("停车切倒车");
+        spdlog::info("[parking] 停车切倒车");
       }
       break;
     }
     case ParkStep::trackout: // 出库
     {
-      spdlog::info("[parking] 开始倒车");
-      if (pathsEdgeLeft.empty() || pathsEdgeRight.empty()) {
+      spdlog::info("[parking] 开始倒车 left size {}", pathsEdgeLeft.size());
+      if (pathsEdgeLeft.empty()) {
         counterRec = 0;
         counterSession = 0;
         step = ParkStep::none; // 退出状态.
@@ -263,13 +212,12 @@ public:
         ptB = cv::Point(0, 0);
         spdlog::info("[parking] 退出停车场");
       }
-      // 改
-      // track.pointsEdgeLeft = pathsEdgeLeft[pathsEdgeLeft.size() - 1];
-      // track.pointsEdgeRight = pathsEdgeRight[pathsEdgeRight.size() - 1];
-      // pathsEdgeLeft.pop_back();
+      track.pointsEdgeLeft = pathsEdgeLeft.back();
+      // track.pointsEdgeRight = pathsEdgeRight.back();
+      pathsEdgeLeft.pop_back();
       // pathsEdgeRight.pop_back();
-      if (counterSession > 40 &&
-          (pathsEdgeLeft.size() < 1 || pathsEdgeRight.size() < 1)) {
+
+      if (counterSession > turningTime && pathsEdgeLeft.empty()) {
         counterRec = 0;
         counterSession = 0;
         step = ParkStep::none; // 退出状态.
@@ -294,13 +242,17 @@ public:
    *
    */
   void drawImage(Tracking track, cv::Mat &image) {
+    cv::circle(image, cv::Point(splitpointdown[0].y, splitpointdown[0].x), 3,
+               cv::Scalar(0, 255, 0), -1);
+    cv::circle(image, cv::Point(splitpointup[1].y, splitpointup[0].x), 3,
+               cv::Scalar(0, 255, 0), -1);
     for (auto &i : horizontalLines) {
       cv::line(image, cv::Point(i[0], i[1]), cv::Point(i[2], i[3]),
                cv::Scalar(0, 0, 255), 1);
     }
 
     if (step != ParkStep::none)
-      putText(image, "[1] BATTERY - ENABLE", cv::Point(10, 10),
+      putText(image, "[1] BATTERY - " + std::to_string(step), cv::Point(10, 10),
               cv::FONT_HERSHEY_TRIPLEX, 0.3, cv::Scalar(0, 255, 0), 1, CV_AA);
   }
 
@@ -318,7 +270,30 @@ private:
   std::vector<std::vector<POINT>> pathsEdgeRight;
   cv::Point ptA = cv::Point(0, 0); // 记录线段的两个端点
   cv::Point ptB = cv::Point(0, 0);
-  int turningTIme = 91; // 转弯时间 21帧
-  int stopTime = 40;    // 停车时间 40帧
-  float swerveTime = 0.2; // 转向时机 0.2 （转弯线出现在屏幕上方0.2处）
+  // 跳变点 0： 跳变点对上方点 1：跳变点对下方点
+  POINT splitpointdown[2] = {{0, 0}, {0, 0}};
+  POINT splitpointup[2] = {{0, 0}, {0, 0}};
+  bool splitpointfound = false;
+
+  int turningTime = 21; // 转弯时间 21帧
+  int stopTime = 100;   // 停车时间 40帧
+  // float swerveTime = 0.2; // 转向时机 0.2 （转弯线出现在屏幕上方0.2处）
+  // 由track.pointsEdgeLeft中的点计算斜率并延长线
+  std::vector<POINT> extendlineEdge(std::vector<POINT> edge,
+                                    int extendLength = 20) {
+    std::vector<POINT> extendedEdge;
+    if (edge.size() < 2) {
+      return extendedEdge; // 如果点集小于2个，直接返回空
+    }
+    POINT lastPoint = edge.back();
+    POINT secondLastPoint = edge[edge.size() - 2];
+    float slope =
+        (lastPoint.y - secondLastPoint.y) / (lastPoint.x - secondLastPoint.x);
+    for (int i = 0; i < extendLength; i++) {
+      int newX = lastPoint.x + i;
+      int newY = lastPoint.y + slope * i;
+      extendedEdge.push_back(POINT(newX, newY));
+    }
+    return extendedEdge;
+  }
 };

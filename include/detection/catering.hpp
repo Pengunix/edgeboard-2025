@@ -16,14 +16,14 @@ public:
     if (cateringEnable) {
       if (!stopEnable && turning) {
         for (size_t i = 0; i < predict.size(); i++) {
-          if (predict[i].type == LABEL_BURGER && predict[i].score > 0.75) {
-            spdlog::info("enable and found");
+          if (predict[i].type == LABEL_BURGER && predict[i].score > 0.60) {
             burgerFound = true; // 发现汉堡标志
             break;
           } else {
             burgerFound = false; // 未发现汉堡标志
           }
         }
+
       }
 
       counterSession++;
@@ -39,8 +39,9 @@ public:
         stopEnable = true;                                    // 停车使能
       else if (counterSession > turningTime)                  // 进入岔路
         turning = false; // 关闭转向标志
-      if ((burgerFound && burgerLeft && track.stdevRight > 100) ||
-          (burgerFound && !burgerLeft && track.stdevLeft > 100)) {
+      // if ((burgerFound && burgerLeft && track.stdevRight > 30) ||
+      //     (burgerFound && !burgerLeft && track.stdevLeft > 30)) {
+      if (burgerFound) {
         return true;
       } else {
         return false;
@@ -48,7 +49,7 @@ public:
 
     } else {
       for (size_t i = 0; i < predict.size(); i++) {
-        if (predict[i].type == LABEL_BURGER && predict[i].score > 0.75 &&
+        if (predict[i].type == LABEL_BURGER && predict[i].score > 0.6 &&
             (predict[i].y + predict[i].height) > ROWSIMAGE * 0.3) {
           counterRec++;
           noRing = true;

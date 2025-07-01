@@ -41,18 +41,18 @@ link_directories(${ONNX_LIBRARY_DIRS})
 #---------------------------------------------------------------------
 add_subdirectory(${PROJECT_SOURCE_DIR}/spdlog)
 
-set(TEST_NAME IPM)
-add_executable(${TEST_NAME} ${PROJECT_SOURCE_DIR}/tests/ipm.cpp)
-target_precompile_headers(${TEST_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/include/json.hpp ${PROJECT_SOURCE_DIR}/include/controlcenter.hpp)
-target_link_libraries(
-        ${TEST_NAME}
-        ${PPNC_LIBRARIES}
-        ${ONNX_LIBRARIES}
-        ${OpenCV_LIBS}
-        ${SERIAL_LIBRARIES}
-        spdlog::spdlog
-        pthread
-)
+# set(TEST_NAME hsv)
+# add_executable(${TEST_NAME} ${PROJECT_SOURCE_DIR}/tests/hsv.cpp)
+# target_precompile_headers(${TEST_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/include/json.hpp ${PROJECT_SOURCE_DIR}/include/controlcenter.hpp)
+# target_link_libraries(
+#         ${TEST_NAME}
+#         ${PPNC_LIBRARIES}
+#         ${ONNX_LIBRARIES}
+#         ${OpenCV_LIBS}
+#         ${SERIAL_LIBRARIES}
+#         spdlog::spdlog
+#         pthread
+# )
 
 add_executable(${CMAKE_PROJECT_NAME} ${PROJECT_SOURCE_DIR}/src/main.cpp)
 target_precompile_headers(${CMAKE_PROJECT_NAME} PUBLIC
@@ -95,4 +95,4 @@ install(FILES
         DESTINATION ${CMAKE_INSTALL_PREFIX}/config
 )
 # 官方模型文件，包含ppnc需要的nms和deploy_paddle，以及模型权重post.onnx
-install(DIRECTORY ${PROJECT_SOURCE_DIR}/res/model DESTINATION ${CMAKE_INSTALL_PREFIX})
+# install(DIRECTORY ${PROJECT_SOURCE_DIR}/res/model DESTINATION ${CMAKE_INSTALL_PREFIX})

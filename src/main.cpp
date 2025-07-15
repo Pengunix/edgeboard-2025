@@ -72,6 +72,7 @@ int main(int argc, char const *argv[]) {
     return -1;
   }
   // 串口接收
+  uart->buzzer = BUZZER_START;
   uart->carControl(0, PWMSERVOMID);
   uart->startReceive();
 
@@ -80,21 +81,21 @@ int main(int argc, char const *argv[]) {
   }
 
   // 等待按键发车
-  if (!motion.params.debug) {
-    spdlog::info("初始化完毕，等待按键发车");
-    uart->buzzer = BUZZER_OK;
-    // TODO(me) 选一下判断，判断特定按键
-    while (!uart->keypress) {
-      cv::waitKey(300);
-    }
-    // 延时3s发车
-    for (int i = 0; i < 10; ++i) {
-      uart->carControl(0, PWMSERVOMID);
-      cv::waitKey(300);
-    }
-    uart->buzzer = BUZZER_START;
-    uart->carControl(0, PWMSERVOMID);
-  }
+  // if (!motion.params.debug) {
+  //   spdlog::info("初始化完毕，等待按键发车");
+  //   uart->buzzer = BUZZER_OK;
+  //   // TODO(me) 选一下判断，判断特定按键
+  //   while (!uart->keypress) {
+  //     cv::waitKey(300);
+  //   }
+  //   // 延时3s发车
+  //   for (int i = 0; i < 10; ++i) {
+  //     uart->carControl(0, PWMSERVOMID);
+  //     cv::waitKey(300);
+  //   }
+  //   uart->buzzer = BUZZER_START;
+  //   uart->carControl(0, PWMSERVOMID);
+  // }
 
   // 初始化参数
   Scene scene = Scene::NormalScene;
@@ -102,6 +103,7 @@ int main(int argc, char const *argv[]) {
 
   cv::Mat img;
 
+  std::this_thread::sleep_for(1s); // 等待摄像头稳定
   while (1) {
     // TODO(me) 重写Debug
     if (motion.params.debug) {
@@ -174,6 +176,7 @@ int main(int argc, char const *argv[]) {
         scene = Scene::StopScene;
         if (stopArea.countExit > 20) {
           // 停车
+          uart->buzzer = BUZZER_FINISH;
           uart->carControl(0, PWMSERVOMID);
           std::this_thread::sleep_for(1s);
           spdlog::critical("-----> System Exit!!! <-----");
@@ -226,7 +229,7 @@ int main(int argc, char const *argv[]) {
     // [10] 障碍区检测
     if ((scene == Scene::NormalScene || scene == Scene::ObstacleScene) &&
         motion.params.obstacle) {
-      if (obstacle.process(img, tracking, detection->results, frameTime, motion.speed, 20,
+      if (obstacle.process(img, tracking, detection, frameTime, motion.speed, 20,
                            roadwidth, motion.params.Obstacle_upscale,
                            motion.params.Obstacle_block_scale,
                            motion.params.Obstacle_distance_block, 0)) {
@@ -287,7 +290,7 @@ int main(int argc, char const *argv[]) {
         motion.speed = motion.params.speedLayby;
       else if (scene == Scene::ParkingScene &&
                parking.step == parking.ParkStep::trackout) {
-        motion.speed = -motion.params.speedDown;
+        motion.speed = -motion.params.speedParking;
         spdlog::info("倒车");
       } else if (scene == Scene::ParkingScene) // 减速
         motion.speed = motion.params.speedParking;
@@ -316,8 +319,9 @@ int main(int argc, char const *argv[]) {
       // if (P > motion.params.pl * 45 * 45 / 50 + motion.params.ph) {
       //   P = motion.params.pl * 45 * 45 / 50 + motion.params.ph;
       // }
-      if (P > 8.1) {
-        P = 8.1;
+      // ! 这里有个限幅，调参时注意
+      if (P > 8) {
+        P = 8;
       }
       D = motion.params.NormD;
     } else if (scene == Scene::RingScene) {
@@ -353,12 +357,11 @@ int main(int argc, char const *argv[]) {
       P = 1;
       D = 10;
     } else if (scene == Scene::CateringScene) {
-      P = 3;
+      P = 4.5;
       D = 10;
     }
     motion.poseCtrl(ctrlCenter, scene, P, D, motion.params.pd_P,
                     motion.params.pd_D);
-
     uart->carControl(motion.speed, motion.servoPwm);
 
     //[16] 综合显示调试UI窗口
@@ -371,17 +374,18 @@ int main(int argc, char const *argv[]) {
       if (motion.params.debug) {
         detection->drawBox(img);
         ctrlCenter.drawImage(tracking, scene, img);
-        // putText(img, formatDouble2String(1000.0 / frameTime, 1) + "FPS",
-        //         cv::Point(COLSIMAGE - 75, 80), cv::FONT_HERSHEY_PLAIN, 1,
-        //         cv::Scalar(0, 0, 255), 1);
+        putText(img, formatDouble2String(1000.0 / frameTime, 1) + "FPS",
+                cv::Point(COLSIMAGE - 75, 80), cv::FONT_HERSHEY_PLAIN, 1,
+                cv::Scalar(0, 0, 255), 1);
 
-        // putText(img,
-        //         "P:" + formatDouble2String(P, 1) +
-        //             " D:" + formatDouble2String(D, 1),
-        //         cv::Point(COLSIMAGE - 98, 95), cv::FONT_HERSHEY_PLAIN, 1,
-        //         cv::Scalar(0, 0, 255), 1);
-        // cv::circle(img, cv::Point(tracking.spurroad[0].y, tracking.spurroad[0].x), 5,
-                  //  cv::Scalar(0, 0, 255), -1); // 中心点
+        putText(img,
+                "P:" + formatDouble2String(P, 1) +
+                    " D:" + formatDouble2String(D, 1),
+                cv::Point(COLSIMAGE - 120, 95), cv::FONT_HERSHEY_PLAIN, 1,
+                cv::Scalar(0, 0, 255), 1);
+        putText(img, "Servo:" + std::to_string(motion.servoPwm),
+                cv::Point(COLSIMAGE - 120, 110), cv::FONT_HERSHEY_PLAIN, 1,
+                cv::Scalar(0, 0, 255), 1);
         cv::imshow("aa", img);
         cv::waitKey(1);
       }

@@ -1,5 +1,6 @@
 #pragma once
 #include "common.hpp"
+using namespace std::literals;
 
 class Parking {
 public:
@@ -23,6 +24,7 @@ public:
       step = ParkStep::none; // 退出状态.
       startTurning = false;  // 恢复状态
       garageFirst = true;    // 进入一号车库
+      garageLeft = false;    // 车库在左侧
       lineY = 0;             // 直线高度
       ptA = cv::Point(0, 0); // 清空线段的两个端点
       ptB = cv::Point(0, 0);
@@ -33,6 +35,11 @@ public:
     {
       for (size_t i = 0; i < predict.size(); i++) {
         if ((predict[i].type == LABEL_BATTERY) && predict[i].score > 0.6) {
+          if (predict[i].x < COLSIMAGE / 2) {
+            garageLeft = true;
+          } else {
+            garageLeft = false;
+          }
           counterRec++;
           break;
         }
@@ -76,8 +83,6 @@ public:
       HoughLinesP(edges, lines, 1, CV_PI / 180, 40, 20, 10);
 
       std::vector<cv::Vec4i> horizontalLines;
-      cv::Mat imgRes = cv::Mat::zeros(cv::Size(COLSIMAGE, ROWSIMAGE),
-                                      CV_8UC3); // 创建全黑图像
       for (const cv::Vec4i &line : lines) {
         cv::Point pt1(line[0], line[1]);
         cv::Point pt2(line[2], line[3]);
@@ -86,11 +91,12 @@ public:
         int midX = (line[0] + line[2]) / 2;
         int midY = (line[1] + line[3]) / 2;
 
-        // 筛选直线，直线只出现在右侧并且在充电标识牌的上方
-        if (abs(angle) < 30 && angle < 0 && midY < batteryY && midY < 200 &&
+        // 筛选直线，直线只出现在右侧并且在充电标识牌的上方,batteryY加个69&&
+        // midY < batteryY + 60
+        if (abs(angle) < 30 && angle < 0 && midY < 180 &&
             midX > COLSIMAGE / 2) { // 接近水平
           horizontalLines.push_back(line);
-          cv::line(imgRes, cv::Point(line[0], line[1]),
+          cv::line(image, cv::Point(line[0], line[1]),
                    cv::Point(line[2], line[3]), cv::Scalar(0, 0, 255), 2);
         }
       }
@@ -124,7 +130,7 @@ public:
                 lineY = std::min(midY1, midY2); // 获取距离最远的线控制车入库
                 step = ParkStep::turning; // 开始入库
                 counterSession = 0;
-               spdlog::info("1号车库");
+                spdlog::info("1号车库");
               } else if (carY < std::min(midY1, midY2)) {
                 garageFirst = false;            // 进入二号车库
                 lineY = std::min(midY1, midY2); // 获取距离最远的线控制车入库
@@ -162,8 +168,6 @@ public:
       HoughLinesP(edges, lines, 1, CV_PI / 180, 40, 40, 10);
 
       std::vector<cv::Vec4i> horizontalLines;
-      cv::Mat imgRes = cv::Mat::zeros(cv::Size(COLSIMAGE, ROWSIMAGE),
-                                      CV_8UC3); // 创建全黑图像
       for (const cv::Vec4i &line : lines) {
         cv::Point pt1(line[0], line[1]);
         cv::Point pt2(line[2], line[3]);
@@ -175,7 +179,7 @@ public:
         // 接近水平并且在右侧
         if (abs(angle) < 40 && angle < 0 && midX > COLSIMAGE / 2) {
           horizontalLines.push_back(line);
-          cv::line(imgRes, cv::Point(line[0], line[1]),
+          cv::line(image, cv::Point(line[0], line[1]),
                    cv::Point(line[2], line[3]), cv::Scalar(0, 0, 255), 2);
           int midY = (line[1] + line[3]) / 2;       // 计算直线中点y坐标
           if (midY > lineY && (midY - lineY) <= 10) // 限制线段增加值
@@ -219,10 +223,16 @@ public:
         // }
         track.pointsEdgeLeft.clear();
         POINT start = POINT(ROWSIMAGE - 30, 40);
-        POINT end = POINT(ptB.y, ptB.x);
+        POINT end = POINT(ptA.y, ptA.x);
         POINT middle = POINT((start.x + end.x) * 0.5, (start.y + end.y) * 0.1);
         std::vector<POINT> input = {start, middle, end};
         track.pointsEdgeLeft = Bezier(0.02, input);
+
+        std::vector<POINT> lineWithAB =
+            points2line(POINT(ptA.y, ptA.x), POINT(ptB.y, ptB.x), 5);
+        track.pointsEdgeLeft.insert(track.pointsEdgeLeft.end(),
+                                    lineWithAB.begin(),
+                                    lineWithAB.end()); // 补直线
 
         pathsEdgeLeft.push_back(track.pointsEdgeLeft); // 记录进厂轨迹
         pathsEdgeRight.push_back(track.pointsEdgeRight);
@@ -252,11 +262,13 @@ public:
         ptA = cv::Point(0, 0); // 清空线段的两个端点
         ptB = cv::Point(0, 0);
         spdlog::info("退出停车场");
+      } else {
+        track.pointsEdgeLeft = pathsEdgeLeft.back();
+        track.pointsEdgeRight = pathsEdgeRight.back();
+        std::this_thread::sleep_for(10ms);
+        pathsEdgeLeft.pop_back();
+        pathsEdgeRight.pop_back();
       }
-      track.pointsEdgeLeft = pathsEdgeLeft[pathsEdgeLeft.size() - 1];
-      track.pointsEdgeRight = pathsEdgeRight[pathsEdgeRight.size() - 1];
-      pathsEdgeLeft.pop_back();
-      pathsEdgeRight.pop_back();
       if (counterSession > 400 &&
           (pathsEdgeLeft.size() < 1 || pathsEdgeRight.size() < 1)) {
         counterRec = 0;
@@ -304,6 +316,7 @@ private:
   uint16_t counterSession = 0; // 图像场次计数器
   uint16_t counterRec = 0;     // 加油站标志检测计数器
   bool garageFirst = true;     // 进入一号车库
+  bool garageLeft = false;     // 车库在左侧
   int lineY = 0;               // 直线高度
   bool startTurning = false;   // 开始转弯
   std::vector<std::vector<POINT>> pathsEdgeLeft; // 记录入库路径

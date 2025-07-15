@@ -338,7 +338,7 @@ public:
           track.pointsEdgeLeft[i].y < COLSIMAGE) {
         circle(centerImage,
                cv::Point(track.pointsEdgeLeft[i].y, track.pointsEdgeLeft[i].x),
-               1, cv::Scalar(0, 255, 0), -1); // 绿色点
+               1, cv::Scalar(0, 255, 128), -1); // 绿色点
       }
     }
     for (int i = 0; i < track.pointsEdgeRight.size(); i++) {
@@ -349,7 +349,7 @@ public:
         circle(
             centerImage,
             cv::Point(track.pointsEdgeRight[i].y, track.pointsEdgeRight[i].x),
-            1, cv::Scalar(0, 255, 255), -1); // 黄色点
+            1, cv::Scalar(128, 255, 0), -1); // 黄色点
       }
     }
 

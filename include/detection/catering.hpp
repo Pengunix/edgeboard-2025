@@ -16,7 +16,7 @@ public:
     if (cateringEnable) {
       if (!stopEnable && turning) {
         for (size_t i = 0; i < predict.size(); i++) {
-          if (predict[i].type == LABEL_BURGER && predict[i].score > 0.60) {
+          if (predict[i].type == LABEL_BURGER && predict[i].score > 0.6) {
             burgerFound = true; // 发现汉堡标志
             break;
           } else {
@@ -46,7 +46,7 @@ public:
       } else {
         return false;
       }
-
+ 
     } else {
       for (size_t i = 0; i < predict.size(); i++) {
         if (predict[i].type == LABEL_BURGER && predict[i].score > 0.6 &&

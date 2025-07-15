@@ -1,5 +1,4 @@
 #pragma once
-#include "common.hpp"
 #include "predictor_api.h"
 #include "json.hpp"
 #include <onnxruntime_cxx_api.h>
@@ -261,14 +260,12 @@ public:
       int pointY = result.y - 20;
       if (pointY < 0)
         pointY = 0;
-      cv::Rect rectText(result.x, pointY, result.width, 20);
-      cv::rectangle(img, rectText, getCvcolor(result.type), -1);
       std::string label_name =
           result.label + " [" + score.substr(0, score.find(".") + 3) + "]";
       cv::Rect rect(result.x, result.y, result.width, result.height);
       cv::rectangle(img, rect, getCvcolor(result.type), 1);
-      cv::putText(img, label_name, cv::Point(10, 10 * i),
-                  cv::FONT_HERSHEY_PLAIN, 0.3, cv::Scalar(0, 0, 254), 1);
+      cv::putText(img, label_name, cv::Point(10, 20 * (i+1)),
+                  cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(128, 164, 78), 1);
     }
   }
 

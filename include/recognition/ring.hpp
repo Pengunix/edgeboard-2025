@@ -523,7 +523,7 @@ public:
             left_leave = true;
         }
 
-        if (stage == 1 && track.stdevRight < 50 && track.stdevRight > 0 &&
+        if (stage == 1 && track.stdevRight < 50 && track.stdevRight > 10 && track.stdevLeft < 500 &&
             (whitecnt < 10 || left_leave)) {
           ringStep = RingStep::None;
           ringType = RingType::RingNone;
@@ -575,7 +575,7 @@ public:
             right_leave = true;
         }
 
-        if (stage == 1 && track.stdevLeft < 50 && track.stdevLeft > 1 &&
+        if (stage == 1 && track.stdevLeft < 50 && track.stdevLeft > 10 && track.stdevRight < 500 &&
             (whitecnt < 10 || right_leave)) {
           ringStep = RingStep::None;
           ringType = RingType::RingNone;

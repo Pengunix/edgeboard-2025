@@ -335,8 +335,8 @@ convertCvPointsToPoints(const std::vector<cv::Point2f> &cvPoints) {
 cv::Mat auto_init_ipm_mat() {
   int offsety = 0;
   std::vector<cv::Point2f> srcPoints = {
-      cv::Point2f(113, 61), cv::Point2f(233, 61), cv::Point2f(71, 130),
-      cv::Point2f(273, 136)};
+      cv::Point2f(107, 57), cv::Point2f(215, 57), cv::Point2f(73, 113),
+      cv::Point2f(242, 113)};
   std::vector<cv::Point2f> dstPoints = {
       cv::Point2f(130, 120 + offsety), cv::Point2f(190, 120 + offsety),
       cv::Point2f(130, 180 + offsety), cv::Point2f(190, 180 + offsety)};

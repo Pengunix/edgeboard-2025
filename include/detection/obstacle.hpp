@@ -32,16 +32,15 @@ public:
 
     if (step == Step::None) {
       pedstrain = false;
-      for (size_t i = 0; i < detect->results.size(); i++) {
-        if ((detect->results[i].type == LABEL_PEDESTRIAN) &&
-            detect->results[i].score > 0.6) {
-          first = 0;
-          step = Step::Start;
-          counterExit = 0;
-          pedstrain = true;
-          detect->inference(imageRGB);
-        }
-      }
+      // for (size_t i = 0; i < detect->results.size(); i++) {
+      //   if ((detect->results[i].type == LABEL_PEDESTRIAN) &&
+      //       detect->results[i].score > 0.6) {
+      //     first = 0;
+      //     step = Step::Start;
+      //     counterExit = 0;
+      //     pedstrain = true;
+      //   }
+      // }
       if (hsvSearch(imageRGB, track)) {
         first = 0;
         step = Step::Start;
@@ -50,6 +49,7 @@ public:
     }
 
     if (step == Step::Start) {
+      // spdlog::info("Obstacle start");
       findFlag = false;
       // 锥桶检测
       cv::Mat hsv;
@@ -58,49 +58,45 @@ public:
       cv::Scalar lowerYellow(15, 100, 60);
       cv::Scalar upperYellow(35, 255, 255);
       // 红色
-      // cv::Scalar lowerRed(0, 100, 60);
-      // cv::Scalar upperRed(10, 255, 255);
+      cv::Scalar lowerRed(18, 135, 121);
+      cv::Scalar upperRed(180, 255, 255);
 
-      // // 紫色
-      // cv::Scalar lowerPurple(130, 100, 60);
-      // cv::Scalar upperPurple(160, 255, 255);
+      // 紫色
+      cv::Scalar lowerPurple(117, 28, 51);
+      cv::Scalar upperPurple(180, 163, 196);
 
       cv::Mat Mask = cv::Mat::zeros(imageRGB.size(), CV_8UC1);
       cv::Mat tmpMask = cv::Mat::zeros(imageRGB.size(), CV_8UC1);
       inRange(hsv, lowerYellow, upperYellow, tmpMask);
-      // cv::bitwise_or(Mask, tmpMask, Mask);
-      // inRange(hsv, lowerRed, upperRed, tmpMask);
-      // if (tmpMask.empty()) {
-      //   spdlog::error("Mask is empty");
-      // }
-      // cv::bitwise_or(Mask, tmpMask, Mask);
-      // inRange(hsv, lowerPurple, upperPurple, tmpMask);
-      // if (tmpMask.empty()) {
-      //   spdlog::error("Mask is empty");
-      // }
-      // cv::bitwise_or(Mask, tmpMask, Mask);
+      cv::bitwise_or(Mask, tmpMask, Mask);
+      inRange(hsv, lowerRed, upperRed, tmpMask);
+      cv::bitwise_or(Mask, tmpMask, Mask);
+      inRange(hsv, lowerPurple, upperPurple, tmpMask);
+      cv::bitwise_or(Mask, tmpMask, Mask);
 
-      // cv::Mat kernel =
-      //     cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(5, 5));
-      // cv::morphologyEx(Mask, Mask, cv::MORPH_OPEN, kernel);
+      cv::Mat kernel =
+          cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(5, 5));
+      cv::morphologyEx(Mask, Mask, cv::MORPH_OPEN, kernel);
 
       std::vector<std::vector<cv::Point>> contours;
       findContours(Mask, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
 
-      cv::Rect Pedestrain;
-      for (const auto &result : detect->results) {
-        if (result.type == LABEL_PEDESTRIAN && result.score > 0.5) {
-          Pedestrain =
-              cv::Rect(result.x, result.y, result.width, result.height);
-          pedstrain = true;
-        }
-      }
+      // cv::Rect Pedestrain;
+      // for (const auto &result : detect->results) {
+      //   if (result.type == LABEL_PEDESTRIAN && result.score > 0.5) {
+      //     Pedestrain =
+      //         cv::Rect(result.x, result.y, result.width, result.height);
+      //     pedstrain = true;
+      //   }
+      // }
 
       int x_Near = 0; // 行坐标
       if (!contours.empty()) {
         // 选取距离最近的锥桶
         cv::Rect Cone;
         for (const auto &contour : contours) {
+          if (cv::contourArea(contour) < 20)
+            continue; // 过滤小锥桶
           cv::Rect Tempcone = boundingRect(contour);
           if (Tempcone.y > ROWSIMAGE * UpScale &&
               Tempcone.y + Tempcone.height < ROWSIMAGE - DisLeaving &&
@@ -116,7 +112,6 @@ public:
                 track.pointsEdgeLeft[row].y; // 障碍右侧到左边线的水平距离
             int disRight = track.pointsEdgeRight[row].y -
                            Tempcone.x; // 右边线到障碍左侧的水平距离
-            // TODO(me) 增加赛道约束，若赛道丢线，则不考虑该锥桶
             if (disLeft >= 0 && disRight >= 0) {
               findFlag = true;
               Cone = Tempcone;
@@ -125,35 +120,37 @@ public:
           }
         }
         // 锥桶与行人比较，选距离最近的赋值给Cone
-        if (pedstrain) {
-          if (Pedestrain.y > ROWSIMAGE * UpScale &&
-              Pedestrain.y + Pedestrain.height < ROWSIMAGE - DisLeaving &&
-              Pedestrain.y > x_Near) {
-            if (!findFlag) {
-              findFlag = true;
-              Cone = Pedestrain;
-              x_Near = Pedestrain.y;
-            } else {
-              int row =
-                  track.pointsEdgeLeft.size() - (Pedestrain.y - track.rowCutUp);
-              if (row > 0) // 太远不管
-              {
-                int disLeft =
-                    Pedestrain.x + Pedestrain.width -
-                    track.pointsEdgeLeft[row].y; // 行人右侧到左边线的水平距离
-                int disRight = track.pointsEdgeRight[row].y -
-                               Pedestrain.x; // 右边线到行人左侧的水平距离
-                if (disLeft >= 0 && disRight >= 0 &&
-                    (Pedestrain.y + Pedestrain.height) <
-                        (Cone.y + Cone.height)) {
-                  findFlag = true;
-                  Cone = Pedestrain;
-                  x_Near = Pedestrain.y;
-                }
-              }
-            }
-          }
-        }
+        // if (pedstrain) {
+        //   if (Pedestrain.y > ROWSIMAGE * UpScale &&
+        //       Pedestrain.y + Pedestrain.height < ROWSIMAGE - DisLeaving &&
+        //       Pedestrain.y > x_Near) {
+        //     if (!findFlag) {
+        //       findFlag = true;
+        //       Cone = Pedestrain;
+        //       x_Near = Pedestrain.y;
+        //     } else {
+        //       int row =
+        //           track.pointsEdgeLeft.size() - (Pedestrain.y -
+        //           track.rowCutUp);
+        //       if (row > 0) // 太远不管
+        //       {
+        //         int disLeft =
+        //             Pedestrain.x + Pedestrain.width -
+        //             track.pointsEdgeLeft[row].y; //
+        //             行人右侧到左边线的水平距离
+        //         int disRight = track.pointsEdgeRight[row].y -
+        //                        Pedestrain.x; // 右边线到行人左侧的水平距离
+        //         if (disLeft >= 0 && disRight >= 0 &&
+        //             (Pedestrain.y + Pedestrain.height) <
+        //                 (Cone.y + Cone.height)) {
+        //           findFlag = true;
+        //           Cone = Pedestrain;
+        //           x_Near = Pedestrain.y;
+        //         }
+        //       }
+        //     }
+        //   }
+        // }
         if (findFlag) {
           resultObs.type = LABEL_CONE;
           resultObs.x = Cone.x;
@@ -194,24 +191,8 @@ public:
           }
         }
         if (first == 1)
-          curtailTracking(track, left,
-                          RoadWidth); // 缩减优化车道线（双车道→单车道）
-                                      // if(left)
-                                      // {
-        //     for (int i = 0; i < track.pointsEdgeRight.size(); i++)
-        //     {
-        //         track.pointsEdgeRight[i].y = track.pointsEdgeLeft[i].y +
-        //         RoadWidth[i]/ 2 + 20;
-        //     }
-        // }
-        // else
-        // {
-        //     for (int i = 0; i < track.pointsEdgeLeft.size(); i++)
-        //     {
-        //         track.pointsEdgeLeft[i].y = track.pointsEdgeRight[i].y -
-        //         RoadWidth[i]/ 2 - 20;
-        //     }
-        // }
+          curtailTracking(track, left, RoadWidth);
+
       } else if (ObstacleMode == 1) {
         if (findFlag)
           step = Step::Inside;
@@ -219,29 +200,31 @@ public:
     }
 
     if (step == Step::Inside) {
+      spdlog::info("Obstacle inside");
       findFlag = false;
       // 锥桶检测
       cv::Mat hsv;
       cvtColor(imageRGB, hsv, cv::COLOR_BGR2HSV);
       // 定义黄色的HSV范围
+      // 定义黄色的HSV范围
       cv::Scalar lowerYellow(15, 100, 60);
       cv::Scalar upperYellow(35, 255, 255);
+      // 红色
+      cv::Scalar lowerRed(18, 135, 121);
+      cv::Scalar upperRed(180, 255, 255);
 
-      cv::Scalar lowerRed(140, 15, 60);
-      cv::Scalar upperRed(180, 183, 255);
+      // 紫色
+      cv::Scalar lowerPurple(117, 28, 51);
+      cv::Scalar upperPurple(180, 163, 196);
 
-      cv::Scalar lowerPurple(102, 30, 69);
-      cv::Scalar upperPurple(171, 147, 178);
-
-      cv::Mat Mask;
-      cv::Mat tmpMask;
+      cv::Mat Mask = cv::Mat::zeros(imageRGB.size(), CV_8UC1);
+      cv::Mat tmpMask = cv::Mat::zeros(imageRGB.size(), CV_8UC1);
       inRange(hsv, lowerYellow, upperYellow, tmpMask);
-      cv::bitwise_or(tmpMask, Mask, Mask);
-      // 寻找多个色块
+      cv::bitwise_or(Mask, tmpMask, Mask);
       inRange(hsv, lowerRed, upperRed, tmpMask);
-      cv::bitwise_or(tmpMask, Mask, Mask);
+      cv::bitwise_or(Mask, tmpMask, Mask);
       inRange(hsv, lowerPurple, upperPurple, tmpMask);
-      cv::bitwise_or(tmpMask, Mask, Mask);
+      cv::bitwise_or(Mask, tmpMask, Mask);
 
       cv::Mat kernel =
           cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(5, 5));
@@ -250,11 +233,13 @@ public:
       std::vector<std::vector<cv::Point>> contours;
       findContours(Mask, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
 
-      int x_Near = 0; // 框面积
+      int x_Near = 0;
       if (!contours.empty()) {
         // 选取距离最近的锥桶
         cv::Rect Cone;
         for (const auto &contour : contours) {
+          if (cv::contourArea(contour) < 20)
+            continue; // 过滤小锥桶
           cv::Rect Tempcone = boundingRect(contour);
           if (Tempcone.y > ROWSIMAGE * UpScale &&
               Tempcone.y + Tempcone.height < ROWSIMAGE - DisLeaving &&
@@ -287,6 +272,7 @@ public:
       }
       if (!findFlag) // 障碍之间未识别到
       {
+        spdlog::info("Obstacle inside and not found others");
         // 情况二 障碍与赛道边线无间隔
         for (int i = 40; i < track.pointsEdgeLeft.size(); i += 2) {
           if (track.pointsEdgeLeft[i].y < track.pointsEdgeLeft[i - 5].y - 5 /**/
@@ -299,6 +285,7 @@ public:
           } else if (track.pointsEdgeRight[i].y >
                          track.pointsEdgeRight[i - 5].y + 5 /**/
                      && track.pointsEdgeLeft[i].x > ROWSIMAGE * block_scale) {
+            spdlog::info("Obstacle end");
             distance = 0;
             step = Step::End;
             passblock = 0;
@@ -311,6 +298,7 @@ public:
           curtailTracking(track, left, RoadWidth);
         }
       } else {
+        spdlog::info("Obstacle inside and found");
         // 障碍物方向判定（左/右）
         int row = track.pointsEdgeLeft.size() - (resultObs.y - track.rowCutUp);
         int disLeft = resultObs.x + resultObs.width -
@@ -357,7 +345,7 @@ public:
           else
             points[3] = {resultObs.y, resultObs.x};
 
-          track.pointsEdgeRight.resize((size_t)row / 2); // 删除错误路线
+          track.pointsEdgeRight.resize((size_t)row / 2);    // 删除错误路线
           std::vector<POINT> repair = Bezier(0.01, points); // 重新规划车道线
           for (int i = 0; i < repair.size(); i++) {
             repair[i].y -= 40;
@@ -446,14 +434,14 @@ private:
         // 找红色
         if (((hsv[0] >= 170 && hsv[0] <= 180) ||
              (hsv[0] >= 0 && hsv[0] <= 10)) &&
-            hsv[1] >= 100 && hsv[2] >= 60 && hsv[1] <= 255 && hsv[2] <= 255) {
+            hsv[1] >= 44 && hsv[2] >= 85 && hsv[1] <= 231 && hsv[2] <= 255) {
           if (y < track.pointsEdgeRight[i].y && y > track.pointsEdgeLeft[i].y)
             red_c++;
           continue;
         }
         // 找紫色
-        if ((hsv[0] >= 130 && hsv[0] <= 160) && hsv[1] >= 100 && hsv[2] >= 60 &&
-            hsv[1] <= 255 && hsv[2] <= 255) {
+        if ((hsv[0] >= 92 && hsv[0] <= 147) && hsv[1] >= 18 && hsv[2] >= 91 &&
+            hsv[1] <= 115 && hsv[2] <= 255) {
           if (y < track.pointsEdgeRight[i].y && y > track.pointsEdgeLeft[i].y)
             purple_c++;
           continue;
@@ -480,7 +468,12 @@ private:
     //   RescueFlag = true;
     //   return;
     // }
-    if (/*red>=30 &&*/ yellow_c >= 20) {
+
+    if (yellow_c >= 20 || red_c >= 20 || purple_c >= 20) {
+      spdlog::info("Obstacle found");
+      spdlog::info("Color counts - Red: {}, purple c: {}, Yellow Center: {}, "
+                   "Yellow Right: {}",
+                   red_c, purple_c, yellow_c, yellow_r);
       return true;
     }
     return false;

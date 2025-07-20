@@ -36,7 +36,6 @@ public:
       //     && track.pointsEdgeLeft[i - 5].y - track.pointsEdgeLeft[i - 10].y
       //     >= 2) left_down = i-10;
       if (i>(track.pointsEdgeLeft.size())) break;
-      // std::cout << "i " << i << " size " << track.pointsEdgeLeft.size() << std::endl; 
       if (track.pointsEdgeLeft[i].y - track.pointsEdgeLeft[i - 5].y <= -20 &&
           track.pointsEdgeLeft[i - 5].y >= track.pointsEdgeLeft[i - 9].y) {
         if (left_down == 0)

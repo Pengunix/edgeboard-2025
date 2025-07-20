@@ -20,6 +20,7 @@ using namespace std::literals;
   2. 路宽数组重测
 */
 long preTime, frameTime = 0;
+long long global_counter = 0;
 
 int main(int argc, char const *argv[]) {
   Preprocess preprocess;                 // 图像预处理类
@@ -106,6 +107,10 @@ int main(int argc, char const *argv[]) {
   std::this_thread::sleep_for(1s); // 等待摄像头稳定
   while (1) {
     // TODO(me) 重写Debug
+    global_counter++;
+    // if (global_counter > 0 && global_counter < 0+30) {
+    //   scene = Scene::NormalScene;
+    // }
     if (motion.params.debug) {
       preTime = std::chrono::duration_cast<std::chrono::milliseconds>(
                     std::chrono::system_clock::now().time_since_epoch())
@@ -396,6 +401,7 @@ int main(int argc, char const *argv[]) {
 
     //[17] 状态复位
     if (sceneLast != scene) {
+      spdlog::info("Scene Change: {} -> {}, global counter {}", getSceneName(sceneLast), getSceneName(scene), global_counter);
       if (scene == Scene::NormalScene)
         uart->buzzer = BUZZER_SLIENT;
       else

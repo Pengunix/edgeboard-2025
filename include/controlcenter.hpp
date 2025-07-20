@@ -188,7 +188,6 @@ public:
       centerEdge1[begin_id].x = car.x;
       centerEdge1[begin_id].y = car.y;
 
-      // std::cout << "begin id" << begin_id << std::endl;
       centerEdge1 = resample_points(
           std::vector<POINT>(centerEdge1.begin() + begin_id, centerEdge1.end()),
           using_resample_dist * pixel_per_meter);

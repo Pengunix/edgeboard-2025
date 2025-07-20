@@ -32,7 +32,7 @@ int main() {
   createTrackbar("V_MAX", controlsWindow, &V_MAX, 255, onTrackbar);
 
   // 打开摄像头
-  VideoCapture cap(0);
+  VideoCapture cap(0, cv::CAP_V4L2);
   cap.set(cv::CAP_PROP_FRAME_WIDTH, 320);
   cap.set(cv::CAP_PROP_FRAME_HEIGHT, 240);
   if (!cap.isOpened()) {

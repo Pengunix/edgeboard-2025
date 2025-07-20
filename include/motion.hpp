@@ -159,7 +159,6 @@ public:
       // pure_angle -= 1;
       // if(pure_angle>0) pure_angle += 2;//pure_angle *= left_scale;
       // else pure_angle -= 1;//pure_angle *= right_scale;
-      // cout << pure_angle << endl;
       // 偏角度闭环
       int pwmDiff = 0;
       pwmDiff = (pure_angle * P) + (pure_angle - pure_angleLast) * D;

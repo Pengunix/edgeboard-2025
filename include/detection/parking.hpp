@@ -146,12 +146,6 @@ public:
 
               break;
             }
-            // else
-            // {
-            //     std::cout << "abs(midY1 - midY2): " << abs(midY1 - midY2) <<
-            //     std::endl; std::cout << "abs(angle1 - angle2): " <<
-            //     abs(angle1 - angle2) << std::endl;
-            // }
           }
         }
       }

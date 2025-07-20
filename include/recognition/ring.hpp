@@ -117,7 +117,6 @@ public:
 
       // 右环
       if (track.stdevLeft < 15 && track.stdevRight > 20) {
-        // std::cout << ringStep << std::endl;
         uint8_t left_sum = 0;
         uint8_t right_cnt = 0;
         uint8_t right_state = 0;

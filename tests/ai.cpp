@@ -37,7 +37,6 @@ int main() {
     auto end = std::chrono::steady_clock::now();
     auto duration =
         std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-    // std::cout << duration.count() << std::endl;
     cv::imshow("aa", img);
     cv::waitKey(20);
   }

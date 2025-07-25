@@ -128,18 +128,18 @@ public:
               if (carY > std::max(midY1, midY2)) {
                 garageFirst = true;             // 进入一号车库
                 lineY = std::min(midY1, midY2); // 获取距离最远的线控制车入库
-                step = ParkStep::turning; // 开始入库
+                step = ParkStep::turning;       // 开始入库
                 counterSession = 0;
                 spdlog::info("1号车库");
               } else if (carY < std::min(midY1, midY2)) {
                 garageFirst = false;            // 进入二号车库
                 lineY = std::min(midY1, midY2); // 获取距离最远的线控制车入库
-                step = ParkStep::turning; // 开始入库
+                step = ParkStep::turning;       // 开始入库
                 counterSession = 0;
                 spdlog::info("2号车库");
               } else {
                 counterSession = 0;
-                step = ParkStep::turning; // 开始入库
+                step = ParkStep::turning;       // 开始入库
                 lineY = std::min(midY1, midY2); // 获取距离最远的线控制车入库
                 spdlog::info("1号车库");
               }
@@ -171,19 +171,35 @@ public:
         double angle = atan2(pt2.y - pt1.y, pt2.x - pt1.x) * 180.0 / CV_PI;
 
         // 接近水平并且在右侧
-        if (abs(angle) < 40 && angle < 0 && midX > COLSIMAGE / 2) {
-          horizontalLines.push_back(line);
-          cv::line(image, cv::Point(line[0], line[1]),
-                   cv::Point(line[2], line[3]), cv::Scalar(0, 0, 255), 2);
-          int midY = (line[1] + line[3]) / 2;       // 计算直线中点y坐标
-          if (midY > lineY && (midY - lineY) <= 10) // 限制线段增加值
-          {
-            lineY = midY; // 更新直线高度
-            ptA = pt1;    // 更新端点
-            ptB = pt2;
+        if (!garageLeft) {
+          if (abs(angle) < 40 && angle < 0 && midX > COLSIMAGE / 2) {
+            horizontalLines.push_back(line);
+            cv::line(image, cv::Point(line[0], line[1]),
+                     cv::Point(line[2], line[3]), cv::Scalar(0, 0, 255), 2);
+            int midY = (line[1] + line[3]) / 2;       // 计算直线中点y坐标
+            if (midY > lineY && (midY - lineY) <= 10) // 限制线段增加值
+            {
+              lineY = midY; // 更新直线高度
+              ptA = pt1;    // 更新端点
+              ptB = pt2;
+            }
           }
+        } else {
+          if (abs(angle) < 40 && angle < 0 && midX < COLSIMAGE / 2) {
+            horizontalLines.push_back(line);
+            cv::line(image, cv::Point(line[0], line[1]),
+                     cv::Point(line[2], line[3]), cv::Scalar(0, 0, 255), 2);
+            int midY = (line[1] + line[3]) / 2;       // 计算直线中点y坐标
+            if (midY > lineY && (midY - lineY) <= 10) // 限制线段增加值
+            {
+              lineY = midY; // 更新直线高度
+              ptA = pt1;    // 更新端点
+              ptB = pt2;
+            }
+ 
         }
       }
+
       // imshow("Detected Lines", imgRes);
       // waitKey(0);
 
@@ -307,17 +323,17 @@ public:
   }
 
 private:
-  uint16_t counterSession = 0; // 图像场次计数器
-  uint16_t counterRec = 0;     // 加油站标志检测计数器
-  bool garageFirst = true;     // 进入一号车库
-  bool garageLeft = false;     // 车库在左侧
-  int lineY = 0;               // 直线高度
-  bool startTurning = false;   // 开始转弯
+  uint16_t counterSession = 0;                   // 图像场次计数器
+  uint16_t counterRec = 0;                       // 加油站标志检测计数器
+  bool garageFirst = true;                       // 进入一号车库
+  bool garageLeft = false;                       // 车库在左侧
+  int lineY = 0;                                 // 直线高度
+  bool startTurning = false;                     // 开始转弯
   std::vector<std::vector<POINT>> pathsEdgeLeft; // 记录入库路径
   std::vector<std::vector<POINT>> pathsEdgeRight;
   cv::Point ptA = cv::Point(0, 0); // 记录线段的两个端点
   cv::Point ptB = cv::Point(0, 0);
-  int turningTime = 28; // 转弯时间 21帧
-  int stopTime = 40;    // 停车时间 40帧
+  int turningTime = 28;   // 转弯时间 21帧
+  int stopTime = 40;      // 停车时间 40帧
   float swerveTime = 0.2; // 转向时机 0.2 （转弯线出现在屏幕上方0.2处）
 };

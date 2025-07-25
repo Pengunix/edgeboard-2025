@@ -522,7 +522,7 @@ public:
             left_leave = true;
         }
 
-        if (stage == 1 && track.stdevRight < 50 && track.stdevRight > 10 && track.stdevLeft < 500 &&
+        if (stage == 1 && track.stdevRight < 50 && track.stdevRight > 5 && track.stdevLeft < 500 &&
             (whitecnt < 10 || left_leave)) {
           ringStep = RingStep::None;
           ringType = RingType::RingNone;

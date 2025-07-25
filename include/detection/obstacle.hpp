@@ -23,28 +23,29 @@ public:
   int passblock = 0;
   int counterExit = 0;
   int colorcnt[4] = {0};
+  int ObstacleMode = 0;
   // TODO(me) merge pedstrain mode to full cone mode
   bool process(cv::Mat imageRGB, Tracking &track,
                std::shared_ptr<Detection> detect, uint64_t frameTime,
                float speed, int DisLeaving, const std::vector<int> &RoadWidth,
-               float UpScale, float block_scale, float distance_block,
-               int ObstacleMode) {
+               float UpScale, float block_scale, float distance_block) {
 
     if (step == Step::None) {
       pedstrain = false;
-      // for (size_t i = 0; i < detect->results.size(); i++) {
-      //   if ((detect->results[i].type == LABEL_PEDESTRIAN) &&
-      //       detect->results[i].score > 0.6) {
-      //     first = 0;
-      //     step = Step::Start;
-      //     counterExit = 0;
-      //     pedstrain = true;
-      //   }
-      // }
+      for (size_t i = 0; i < detect->results.size(); i++) {
+        if ((detect->results[i].type == LABEL_BLOCK) &&
+            detect->results[i].score > 0.6) {
+          first = 0;
+          step = Step::Start;
+          counterExit = 0;
+          ObstacleMode = 1;
+        }
+      }
       if (hsvSearch(imageRGB, track)) {
         first = 0;
         step = Step::Start;
         counterExit = 0;
+        ObstacleMode = 0;
       }
     }
 

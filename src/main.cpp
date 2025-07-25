@@ -237,7 +237,7 @@ int main(int argc, char const *argv[]) {
       if (obstacle.process(img, tracking, detection, frameTime, motion.speed, 20,
                            roadwidth, motion.params.Obstacle_upscale,
                            motion.params.Obstacle_block_scale,
-                           motion.params.Obstacle_distance_block, 0)) {
+                           motion.params.Obstacle_distance_block)) {
         obstacle.drawImage(img);
         scene = Scene::ObstacleScene;
       } else
